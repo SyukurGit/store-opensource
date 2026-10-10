@@ -1,4 +1,4 @@
-// StoreKu Frontend Catalog & Checkout Engine
+// Digihub Frontend Catalog & Checkout Engine
 
 let allProducts = [];
 let selectedProduct = null;
@@ -17,20 +17,23 @@ function showToast(msg) {
   setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
-// LocalStorage History Helpers (Delegates to unified StoreKuOrders)
+// LocalStorage History Helpers (Delegates to unified DigihubOrders)
 function getHistory() {
-  return window.StoreKuOrders ? StoreKuOrders.getOrders() : [];
+  const handler = window.DigihubOrders || window.StoreKuOrders;
+  return handler ? handler.getOrders() : [];
 }
 
 function saveHistoryItem(item) {
-  if (window.StoreKuOrders) {
-    StoreKuOrders.saveOrder(item);
+  const handler = window.DigihubOrders || window.StoreKuOrders;
+  if (handler) {
+    handler.saveOrder(item);
   }
 }
 
 function updateHistoryBadge() {
-  if (window.StoreKuOrders) {
-    StoreKuOrders.updateBadge();
+  const handler = window.DigihubOrders || window.StoreKuOrders;
+  if (handler) {
+    handler.updateBadge();
   }
 }
 
@@ -234,9 +237,11 @@ async function submitCheckout() {
     const order = data.data;
 
     // SAVE EMAIL & ORDER TO LOCAL STORAGE!
+    localStorage.setItem('digihub_saved_email', email);
     localStorage.setItem('storeku_saved_email', email);
-    if (window.StoreKuOrders) {
-      StoreKuOrders.saveOrder({
+    const orderHandler = window.DigihubOrders || window.StoreKuOrders;
+    if (orderHandler) {
+      orderHandler.saveOrder({
         invoice_number: order.invoice_number,
         claim_code: order.claim_code,
         product_name: order.product_name,
@@ -257,10 +262,11 @@ async function submitCheckout() {
   }
 }
 
-// History Modal Render (Uses unified StoreKuOrders)
+// History Modal Render (Uses unified DigihubOrders)
 function openHistoryModal() {
-  if (window.StoreKuOrders) {
-    StoreKuOrders.renderHistoryList('historyListContainer');
+  const orderHandler = window.DigihubOrders || window.StoreKuOrders;
+  if (orderHandler) {
+    orderHandler.renderHistoryList('historyListContainer');
   }
   document.getElementById('historyModal')?.classList.add('open');
 }

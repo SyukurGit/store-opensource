@@ -1,4 +1,4 @@
-// StoreKu Product Detail JavaScript
+// Digihub Product Detail JavaScript
 let currentProduct = null;
 let currentQty = 1;
 
@@ -61,7 +61,7 @@ async function initProductPage() {
 
   } catch (err) {
     console.error('Fetch product error:', err);
-    showError('Koneksi Gagal', 'Gagal menghubungi server StoreKu. Silakan coba beberapa saat lagi.');
+    showError('Koneksi Gagal', 'Gagal menghubungi server Digihub. Silakan coba beberapa saat lagi.');
   }
 }
 
@@ -79,7 +79,7 @@ function renderProductDetail(p) {
   document.getElementById('productDetailContent').style.display = 'grid';
 
   // Page title & Breadcrumb
-  document.title = `${p.name} - StoreKu`;
+  document.title = `${p.name} - Digihub`;
   document.getElementById('bcProductName').textContent = p.name;
 
   // Header
@@ -223,7 +223,7 @@ function openCheckoutModal() {
   document.getElementById('mProdLogo').src = currentProduct.logo || 'https://via.placeholder.com/40';
 
   const emailInput = document.getElementById('emailInput');
-  const savedEmail = localStorage.getItem('storeku_saved_email');
+  const savedEmail = localStorage.getItem('digihub_saved_email') || localStorage.getItem('storeku_saved_email');
   if (emailInput && savedEmail) {
     emailInput.value = savedEmail;
   }
@@ -279,9 +279,10 @@ async function submitCheckout() {
     const order = data.data;
 
     // SAVE EMAIL & ORDER TO LOCAL STORAGE!
+    localStorage.setItem('digihub_saved_email', email);
     localStorage.setItem('storeku_saved_email', email);
-    if (window.StoreKuOrders) {
-      StoreKuOrders.saveOrder({
+    if (window.DigihubOrders) {
+      DigihubOrders.saveOrder({
         invoice_number: order.invoice_number,
         claim_code: order.claim_code,
         product_name: order.product_name,

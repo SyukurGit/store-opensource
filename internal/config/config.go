@@ -17,12 +17,13 @@ type Config struct {
 	AdminUsername       string
 	AdminPassword       string
 	AdminSecretKey      string
-	USDToIDRRate        float64
-	ProfitMarginPercent float64
-	ProfitMarginFixed   int64
-	ResendAPIKey        string
-	ResendFromEmail     string
-	StoreBaseURL        string
+	USDToIDRRate            float64
+	ProfitMarginPercent     float64
+	ProfitMarginFixed       int64
+	ResendAPIKey            string
+	ResendFromEmail         string
+	StoreBaseURL            string
+	TelegramSupportUsername string
 }
 
 func LoadConfig() *Config {
@@ -30,21 +31,22 @@ func LoadConfig() *Config {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		Port:                getEnv("PORT", "8080"),
-		DatabasePath:        getEnv("DATABASE_PATH", "storeku.db"),
-		DigitalCoreBaseURL:  getEnv("DIGITALCORE_BASE_URL", "https://digitalcore.top"),
-		DigitalCoreAPIKey:   getEnv("DIGITALCORE_API_KEY", ""),
-		PaymentGAPIURL:      getEnv("PAYMENTG_API_URL", "https://paymentg.syukurapi.online/api/sandbox"),
-		PaymentGAPIKey:      getEnv("PAYMENTG_API_KEY", ""),
-		AdminUsername:       getEnv("ADMIN_USERNAME", "admin"),
-		AdminPassword:       getEnv("ADMIN_PASSWORD", "admin123"),
-		AdminSecretKey:      getEnv("ADMIN_SECRET_KEY", "storeku_default_secret_key"),
-		USDToIDRRate:        getEnvFloat("USD_TO_IDR_RATE", 18000.0),
-		ProfitMarginPercent: getEnvFloat("PROFIT_MARGIN_PERCENT", 25.0),
-		ProfitMarginFixed:   getEnvInt64("PROFIT_MARGIN_FIXED", 2000),
-		ResendAPIKey:        getEnv("RESEND_API_KEY", ""),
-		ResendFromEmail:     getEnv("RESEND_FROM_EMAIL", "StoreKu <orders@syukurapi.online>"),
-		StoreBaseURL:        getEnv("STORE_BASE_URL", "http://localhost:8080"),
+		Port:                    getEnv("PORT", "8080"),
+		DatabasePath:            getEnv("DATABASE_PATH", "storeku.db"),
+		DigitalCoreBaseURL:      getEnv("DIGITALCORE_BASE_URL", "https://digitalcore.top"),
+		DigitalCoreAPIKey:       getEnv("DIGITALCORE_API_KEY", ""),
+		PaymentGAPIURL:          getEnv("PAYMENTG_API_URL", "https://paymentg.syukurapi.online/api/sandbox"),
+		PaymentGAPIKey:          getEnv("PAYMENTG_API_KEY", ""),
+		AdminUsername:           getEnv("ADMIN_USERNAME", "admin"),
+		AdminPassword:           getEnv("ADMIN_PASSWORD", "admin123"),
+		AdminSecretKey:          getEnv("ADMIN_SECRET_KEY", "storeku_default_secret_key"),
+		USDToIDRRate:            getEnvFloat("USD_TO_IDR_RATE", 18000.0),
+		ProfitMarginPercent:     getEnvFloat("PROFIT_MARGIN_PERCENT", 25.0),
+		ProfitMarginFixed:       getEnvInt64("PROFIT_MARGIN_FIXED", 2000),
+		ResendAPIKey:            getEnv("RESEND_API_KEY", ""),
+		ResendFromEmail:         getEnv("RESEND_FROM_EMAIL", "Digihub <orders@syukurapi.online>"),
+		StoreBaseURL:            getEnv("STORE_BASE_URL", "http://localhost:8080"),
+		TelegramSupportUsername: getEnv("TELEGRAM_SUPPORT_USERNAME", "Digihubsupport"),
 	}
 
 	return cfg

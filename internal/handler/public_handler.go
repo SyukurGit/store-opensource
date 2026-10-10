@@ -2,24 +2,41 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
+	"storeku/internal/config"
 	"storeku/internal/models"
 	"storeku/internal/service"
 )
 
 type PublicHandler struct {
+	cfg          *config.Config
 	dcClient     *service.DigitalCoreClient
 	orderService *service.OrderService
 }
 
-func NewPublicHandler(dcClient *service.DigitalCoreClient, orderService *service.OrderService) *PublicHandler {
+func NewPublicHandler(cfg *config.Config, dcClient *service.DigitalCoreClient, orderService *service.OrderService) *PublicHandler {
 	return &PublicHandler{
+		cfg:          cfg,
 		dcClient:     dcClient,
 		orderService: orderService,
 	}
+}
+
+// GetAppConfig handles GET /api/config
+func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
+	username := "Digihubsupport"
+	if h.cfg != nil && h.cfg.TelegramSupportUsername != "" {
+		username = h.cfg.TelegramSupportUsername
+	}
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success":           true,
+		"telegram_username": username,
+		"telegram_url":      fmt.Sprintf("https://t.me/%s", username),
+	})
 }
 
 // GetProducts handles GET /api/products

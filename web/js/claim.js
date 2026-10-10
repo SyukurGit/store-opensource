@@ -1,4 +1,4 @@
-// StoreKu License Claim Engine
+// Digihub License Claim Engine
 
 function showToast(msg) {
   const toast = document.getElementById('toast');
@@ -50,8 +50,9 @@ function renderClaimResult(data) {
   resultBox.style.display = 'block';
 
   // Sync to local order history
-  if (window.StoreKuOrders && data.invoice_number) {
-    StoreKuOrders.saveOrder({
+  const orderHandler = window.DigihubOrders || window.StoreKuOrders;
+  if (orderHandler && data.invoice_number) {
+    orderHandler.saveOrder({
       invoice_number: data.invoice_number,
       claim_code: data.claim_code,
       product_name: data.product_name,
@@ -89,7 +90,7 @@ function renderClaimResult(data) {
         <p style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
           ${escapeHtml(data.quota_out_message || "Mohon maaf, kuota produk saat ini telah habis terjual. Dana pembayaran Anda aman 100%. Untuk proses pengembalian dana (refund), silakan hubungi Customer Service kami via Telegram.")}
         </p>
-        <a href="https://t.me/storeku_admin" target="_blank" rel="noopener" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; padding: 10px 20px;">
+        <a href="https://t.me/Digihubsupport" target="_blank" rel="noopener" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; padding: 10px 20px;" data-tele-cs>
           <span>Hubungi CS via Telegram</span> ➔
         </a>
       </div>

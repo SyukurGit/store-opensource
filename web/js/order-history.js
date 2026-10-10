@@ -1,9 +1,9 @@
-// StoreKu Unified Order History Engine
+// Digihub Unified Order History Engine
 // Manages local order storage, real-time payment states, 15-min expiration audit & UI rendering
 
-const StoreKuOrders = (() => {
-  const PRIMARY_STORAGE_KEY = 'storeku_orders';
-  const LEGACY_STORAGE_KEY = 'storeku_history';
+const DigihubOrders = (() => {
+  const PRIMARY_STORAGE_KEY = 'digihub_orders';
+  const LEGACY_STORAGE_KEYS = ['storeku_orders', 'storeku_history'];
 
   // Format currency helper
   function formatIDR(num) {
@@ -31,34 +31,39 @@ const StoreKuOrders = (() => {
     try {
       let orders = JSON.parse(localStorage.getItem(PRIMARY_STORAGE_KEY) || '[]');
       
-      // Auto-migrate from legacy key if primary is empty or legacy has unmerged items
-      const legacy = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || '[]');
-      if (Array.isArray(legacy) && legacy.length > 0) {
-        const existingInv = new Set(orders.map(o => o.invoice_number));
-        let merged = false;
-        for (const item of legacy) {
-          if (item && item.invoice_number && !existingInv.has(item.invoice_number)) {
-            orders.push({
-              invoice_number: item.invoice_number,
-              claim_code: item.claim_code || '',
-              product_name: item.product_name || 'Produk Digital',
-              quantity: item.quantity || 1,
-              total_amount: item.total_amount || 0,
-              payment_status: item.payment_status || 'PENDING',
-              expires_at: item.expires_at || null,
-              created_at: item.created_at || new Date().toISOString()
-            });
-            merged = true;
+      // Auto-migrate from legacy keys if primary is empty or legacy has unmerged items
+      let merged = false;
+      const existingInv = new Set(orders.map(o => o.invoice_number));
+
+      for (const legKey of LEGACY_STORAGE_KEYS) {
+        const legacy = JSON.parse(localStorage.getItem(legKey) || '[]');
+        if (Array.isArray(legacy) && legacy.length > 0) {
+          for (const item of legacy) {
+            if (item && item.invoice_number && !existingInv.has(item.invoice_number)) {
+              orders.push({
+                invoice_number: item.invoice_number,
+                claim_code: item.claim_code || '',
+                product_name: item.product_name || 'Produk Digital',
+                quantity: item.quantity || 1,
+                total_amount: item.total_amount || 0,
+                payment_status: item.payment_status || 'PENDING',
+                expires_at: item.expires_at || null,
+                created_at: item.created_at || new Date().toISOString()
+              });
+              existingInv.add(item.invoice_number);
+              merged = true;
+            }
           }
         }
-        if (merged) {
-          localStorage.setItem(PRIMARY_STORAGE_KEY, JSON.stringify(orders));
-        }
+      }
+
+      if (merged) {
+        localStorage.setItem(PRIMARY_STORAGE_KEY, JSON.stringify(orders));
       }
 
       return Array.isArray(orders) ? orders : [];
     } catch (e) {
-      console.warn('StoreKuOrders: Failed to read orders from localStorage:', e);
+      console.warn('DigihubOrders: Failed to read orders from localStorage:', e);
       return [];
     }
   }
@@ -96,9 +101,10 @@ const StoreKuOrders = (() => {
 
       if (list.length > 50) list = list.slice(0, 50);
       localStorage.setItem(PRIMARY_STORAGE_KEY, JSON.stringify(list));
+      localStorage.setItem('storeku_orders', JSON.stringify(list));
       updateBadge();
     } catch (e) {
-      console.warn('StoreKuOrders: Failed to save order:', e);
+      console.warn('DigihubOrders: Failed to save order:', e);
     }
   }
 
@@ -116,9 +122,10 @@ const StoreKuOrders = (() => {
       }
       if (changed) {
         localStorage.setItem(PRIMARY_STORAGE_KEY, JSON.stringify(list));
+        localStorage.setItem('storeku_orders', JSON.stringify(list));
       }
     } catch (e) {
-      console.warn('StoreKuOrders: Failed to update order status:', e);
+      console.warn('DigihubOrders: Failed to update order status:', e);
     }
   }
 
@@ -283,7 +290,40 @@ const StoreKuOrders = (() => {
   };
 })();
 
+// Export globally with backwards-compatible alias
+window.DigihubOrders = DigihubOrders;
+window.StoreKuOrders = DigihubOrders;
+
 // Auto-init badge on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  StoreKuOrders.updateBadge();
+  DigihubOrders.updateBadge();
 });
+
+// Auto-sync Telegram support username dynamically from /api/config
+(async () => {
+  try {
+    let username = sessionStorage.getItem('digihub_tele_user');
+    if (!username) {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.telegram_username) {
+          username = data.telegram_username;
+          sessionStorage.setItem('digihub_tele_user', username);
+        }
+      }
+    }
+    if (username) {
+      document.querySelectorAll('a[href*="t.me/"]').forEach(a => {
+        a.href = a.href.replace(/t\.me\/[a-zA-Z0-9_]+/, `t.me/${username}`);
+      });
+      document.querySelectorAll('[data-tele-cs]').forEach(el => {
+        if (el.textContent.includes('Bantuan CS Telegram')) {
+          el.textContent = `💬 Bantuan CS Telegram: @${username}`;
+        } else if (el.textContent.includes('Chat CS Telegram')) {
+          el.textContent = `💬 Chat CS Telegram: @${username}`;
+        }
+      });
+    }
+  } catch (e) {}
+})();

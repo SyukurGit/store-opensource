@@ -1,4 +1,4 @@
-// StoreKu Payment Page Engine
+// Digihub Payment Page Engine
 
 let pollInterval = null;
 let timerInterval = null;
@@ -194,7 +194,7 @@ function showSuccessView(order) {
         <p style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
           ${escapeHtml(order.quota_out_message || "Mohon maaf, kuota produk saat ini telah habis terjual. Dana pembayaran Anda aman 100%. Untuk proses pengembalian dana (refund), silakan hubungi Customer Service kami via Telegram.")}
         </p>
-        <a href="https://t.me/storeku_admin" target="_blank" rel="noopener" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; padding: 10px 20px;">
+        <a href="https://t.me/Digihubsupport" target="_blank" rel="noopener" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; padding: 10px 20px;" data-tele-cs>
           <span>Hubungi CS via Telegram</span> ➔
         </a>
       </div>

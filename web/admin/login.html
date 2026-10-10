@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login Admin - StoreKu</title>
+  <title>Login Admin - Digihub</title>
+  <link rel="icon" type="image/png" href="/logo/digi_D_aja.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -14,8 +15,10 @@
   <div class="payment-container" style="max-width: 420px; margin-top: 6rem;">
     <div class="payment-card" style="text-align: left;">
       <div style="text-align: center; margin-bottom: 1.5rem;">
-        <div class="logo-badge" style="margin: 0 auto 0.75rem; width: 44px; height: 44px; font-size: 1.4rem;">🔐</div>
-        <h1 style="font-size: 1.5rem; font-weight: 800; color: #fff;">Panel Admin StoreKu</h1>
+        <div style="display: inline-block; background: #ffffff; padding: 10px 18px; border-radius: 12px; margin-bottom: 0.85rem; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">
+          <img src="/logo/digi_tulisan_bawah.png" alt="Digihub Admin" style="height: 52px; width: auto; object-fit: contain; display: block;">
+        </div>
+        <h1 style="font-size: 1.4rem; font-weight: 800; color: #fff;">Panel Admin Digihub</h1>
         <p style="font-size: 0.85rem; color: var(--text-muted);">Masukkan kredensial admin untuk masuk.</p>
       </div>
 
@@ -47,7 +50,7 @@
   <script>
     // Auto-check if already logged in
     (async () => {
-      const token = localStorage.getItem('storeku_admin_token');
+      const token = localStorage.getItem('digihub_admin_token') || localStorage.getItem('storeku_admin_token');
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
       try {
         const res = await fetch('/api/admin/stats', { headers });
@@ -77,6 +80,7 @@
         const data = await res.json();
         if (data.success) {
           if (data.token) {
+            localStorage.setItem('digihub_admin_token', data.token);
             localStorage.setItem('storeku_admin_token', data.token);
           }
           window.location.href = '/admin';

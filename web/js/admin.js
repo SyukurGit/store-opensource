@@ -1,4 +1,4 @@
-// StoreKu Admin Engine (Multi-page Support)
+// Digihub Admin Engine (Multi-page Support)
 
 let allAdminProducts = [];
 let filteredAdminProducts = [];
@@ -38,7 +38,7 @@ function showToast(msg) {
 // AUTH & FETCH HELPER
 // -------------------------------------------------------------
 function getAdminHeaders() {
-  const token = localStorage.getItem('storeku_admin_token');
+  const token = localStorage.getItem('digihub_admin_token') || localStorage.getItem('storeku_admin_token');
   const headers = {};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -53,6 +53,7 @@ async function adminFetch(url, options = {}) {
   };
   const res = await fetch(url, { ...options, headers: combinedHeaders });
   if (res.status === 401) {
+    localStorage.removeItem('digihub_admin_token');
     localStorage.removeItem('storeku_admin_token');
     window.location.href = '/admin/login';
     return null;
@@ -701,6 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Logout Button
   document.getElementById('btnLogout')?.addEventListener('click', async () => {
+    localStorage.removeItem('digihub_admin_token');
     localStorage.removeItem('storeku_admin_token');
     await fetch('/api/admin/logout', { method: 'POST' });
     window.location.href = '/admin/login';

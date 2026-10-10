@@ -42,7 +42,7 @@ func main() {
 	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
 
 	// 5. Initialize Handlers
-	publicHandler := handler.NewPublicHandler(dcClient, orderService)
+	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService)
 	webhookHandler := handler.NewWebhookHandler(orderService)
 	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, dcClient, orderService)
 
@@ -57,6 +57,7 @@ func main() {
 	// API Routes
 	r.Route("/api", func(r chi.Router) {
 		// Public Store API
+		r.Get("/config", publicHandler.GetAppConfig)
 		r.Get("/products", publicHandler.GetProducts)
 		r.Get("/products/{slug}", publicHandler.GetProductDetail)
 		r.Post("/checkout", publicHandler.CreateCheckout)
