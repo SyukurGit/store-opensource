@@ -1,4 +1,16 @@
 /* Admin Panel Stylesheet */
+.admin-brand-tag {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .admin-container {
   max-width: 1400px;
   margin: 2rem auto 4rem;

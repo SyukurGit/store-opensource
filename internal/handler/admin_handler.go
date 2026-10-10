@@ -69,15 +69,20 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 	token := GenerateAdminToken(h.cfg.AdminSecretKey)
 
 	// Set persistent HTTP-only session cookie (30 days)
-	http.SetCookie(w, &http.Cookie{
-		Name:     "storeku_admin_session",
+	cookieVal := &http.Cookie{
+		Name:     "digihub_admin_session",
 		Value:    token,
 		Path:     "/",
 		MaxAge:   86400 * 30, // 30 days
 		Expires:  time.Now().Add(30 * 24 * time.Hour),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-	})
+	}
+	http.SetCookie(w, cookieVal)
+	// Also set storeku_admin_session for backward compatibility
+	cookieLegacy := *cookieVal
+	cookieLegacy.Name = "storeku_admin_session"
+	http.SetCookie(w, &cookieLegacy)
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -88,6 +93,15 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout handles POST /api/admin/logout
 func (h *AdminHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "digihub_admin_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "storeku_admin_session",
 		Value:    "",
@@ -103,6 +117,7 @@ func (h *AdminHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		"message": "Logout berhasil",
 	})
 }
+
 
 // GetStats handles GET /api/admin/stats
 func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) {

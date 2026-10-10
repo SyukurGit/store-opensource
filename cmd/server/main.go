@@ -92,9 +92,10 @@ func main() {
 	workDir, _ := os.Getwd()
 	webDir := filepath.Join(workDir, "web")
 
-	// Static Assets (css, js)
+	// Static Assets (css, js, logo)
 	r.Handle("/css/*", http.StripPrefix("/css/", http.FileServer(http.Dir(filepath.Join(webDir, "css")))))
 	r.Handle("/js/*", http.StripPrefix("/js/", http.FileServer(http.Dir(filepath.Join(webDir, "js")))))
+	r.Handle("/logo/*", http.StripPrefix("/logo/", http.FileServer(http.Dir(filepath.Join(webDir, "logo")))))
 
 	// 301 Permanent Redirects for legacy .html URLs
 	cleanRedirects := map[string]string{
@@ -162,7 +163,11 @@ func main() {
 	})
 	r.Get("/admin/login", func(w http.ResponseWriter, r *http.Request) {
 		expectedToken := handler.GenerateAdminToken(cfg.AdminSecretKey)
-		if cookie, err := r.Cookie("storeku_admin_session"); err == nil && cookie.Value == expectedToken {
+		cookie, err := r.Cookie("digihub_admin_session")
+		if err != nil {
+			cookie, err = r.Cookie("storeku_admin_session")
+		}
+		if err == nil && cookie.Value == expectedToken {
 			http.Redirect(w, r, "/admin", http.StatusFound)
 			return
 		}
@@ -180,7 +185,7 @@ func main() {
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("==================================================")
-	log.Printf(" StoreKu is live on http://localhost:%s", cfg.Port)
+	log.Printf(" Digihub is live on http://localhost:%s", cfg.Port)
 	log.Printf(" 🛍️  Katalog & Toko : http://localhost:%s/", cfg.Port)
 	log.Printf(" 🔑  Klaim Lisensi  : http://localhost:%s/claim", cfg.Port)
 	log.Printf(" ⚙️  Panel Admin    : http://localhost:%s/admin", cfg.Port)
@@ -188,6 +193,7 @@ func main() {
 	log.Printf(" 📦  DigitalCore URL: %s", cfg.DigitalCoreBaseURL)
 	log.Printf(" 📧  Resend Sender  : %s", cfg.ResendFromEmail)
 	log.Printf("==================================================")
+
 
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("Server exited with error: %v", err)

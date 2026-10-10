@@ -66,6 +66,86 @@ body {
   letter-spacing: -0.02em;
 }
 
+.logo-navbar-img {
+  height: 38px;
+  width: auto;
+  max-width: 145px;
+  object-fit: contain;
+  background: #ffffff;
+  padding: 3px 10px;
+  border-radius: 9px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  display: block;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.logo-navbar-img:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+}
+
+.footer-logo-img {
+  height: 42px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+  background: #ffffff;
+  padding: 4px 12px;
+  border-radius: 9px;
+  display: inline-block;
+  margin-bottom: 0.85rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Brand Showcase Card untuk About Page */
+.brand-showcase-card {
+  text-align: center;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(99, 102, 241, 0.05) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 2.75rem 1.5rem;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.brand-showcase-logo-box {
+  background: #ffffff;
+  display: inline-block;
+  padding: 18px 26px;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  margin-bottom: 1.25rem;
+  transition: transform 0.25s ease;
+}
+
+.brand-showcase-logo-box:hover {
+  transform: scale(1.02);
+}
+
+.brand-showcase-img {
+  max-height: 130px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.brand-hero-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.brand-hero-desc {
+  max-width: 620px;
+  margin: 0 auto;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
 .logo-badge {
   background: linear-gradient(135deg, var(--primary), #a855f7);
   width: 34px;
@@ -82,6 +162,7 @@ body {
   align-items: center;
   gap: 0.75rem;
 }
+
 
 .btn-nav {
   display: inline-flex;
@@ -888,6 +969,11 @@ body {
 /* MOBILE AUDIT: 2-COLUMN CATALOG & RESPONSIVE DETAIL ERGONOMICS */
 /* ============================================================== */
 @media (max-width: 640px) {
+  .logo-navbar-img {
+    height: 32px;
+    padding: 2px 7px;
+    max-width: 125px;
+  }
   /* Catalog 2-box per row on mobile */
   .products-section {
     padding: 0 0.65rem;

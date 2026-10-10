@@ -57,13 +57,13 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
 
 	fromEmail := s.cfg.ResendFromEmail
 	if fromEmail == "" {
-		fromEmail = "StoreKu <orders@syukurapi.online>"
+		fromEmail = "Digihub <orders@syukurapi.online>"
 	}
 
-	claimURL := fmt.Sprintf("%s/claim.html?code=%s", strings.TrimRight(s.cfg.StoreBaseURL, "/"), claimCode)
+	claimURL := fmt.Sprintf("%s/claim?code=%s", strings.TrimRight(s.cfg.StoreBaseURL, "/"), claimCode)
 	formattedTotal := fmt.Sprintf("Rp %s", formatNumber(totalAmount))
 
-	subject := fmt.Sprintf("Pembayaran Berhasil — Kode Klaim: %s", claimCode)
+	subject := fmt.Sprintf("Pembayaran Berhasil — Kode Klaim Digihub: %s", claimCode)
 	htmlContent := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -81,11 +81,11 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
           <!-- Logo / Header -->
           <tr>
             <td>
-              <div style="font-size: 20px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; margin-bottom: 4px;">
-                ⚡ StoreKu Digital
+              <div style="font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; margin-bottom: 4px;">
+                ⚡ Digihub Digital
               </div>
               <div style="font-size: 13px; color: #94a3b8; margin-bottom: 24px;">
-                Toko Produk & Lisensi Digital Instan
+                Pusat Produk & Lisensi Digital Instan
               </div>
             </td>
           </tr>
@@ -130,7 +130,7 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
                   %s
                 </div>
                 <div style="font-size: 12px; color: #94a3b8; margin-top: 6px;">
-                  Gunakan kode di atas untuk mengambil lisensi/akun Anda kapan saja.
+                  Gunakan kode di atas untuk mengambil lisensi/akun Anda kapan saja di Digihub.
                 </div>
               </div>
             </td>
@@ -148,10 +148,11 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
           <!-- Footer Note -->
           <tr>
             <td style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px; font-size: 12px; color: #64748b; line-height: 1.5;">
-              Email ini dikirim otomatis oleh StoreKu via domain resmi <strong>syukurapi.online</strong>.<br>
+              Email ini dikirim otomatis oleh Digihub via domain resmi <strong>syukurapi.online</strong>.<br>
               Jika Anda tidak merasa melakukan transaksi ini, abaikan email ini.
             </td>
           </tr>
+
 
         </table>
       </td>

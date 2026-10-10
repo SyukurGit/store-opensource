@@ -116,7 +116,7 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	claimCode := fmt.Sprintf("CLM-%s", generateRandomString(6))
 
 	// 4. Request QRIS tagihan from PaymentG
-	metadata := fmt.Sprintf("StoreKu: %s (Qty: %d)", targetProduct.Name, req.Quantity)
+	metadata := fmt.Sprintf("Digihub: %s (Qty: %d)", targetProduct.Name, req.Quantity)
 	pgOrder, err := s.pgClient.CreateQRISOrder(invoiceNumber, subtotalIDR, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat tagihan QRIS PaymentG: %w", err)
