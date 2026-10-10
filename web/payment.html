@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pembayaran QRIS - StoreKu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- Top Navbar -->
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="/" class="logo-wrap">
+        <div class="logo-badge">⚡</div>
+        <span>StoreKu</span>
+      </a>
+      <div class="nav-actions">
+        <a href="/" class="btn-nav">
+          <span class="nav-text-desktop">← Kembali ke Toko</span>
+          <span class="nav-text-mobile">← Toko</span>
+        </a>
+        <a href="/claim" class="btn-nav">
+          <span class="nav-text-desktop">🔑 Klaim Produk</span>
+          <span class="nav-text-mobile">🔑 Klaim</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="payment-container">
+    <div class="payment-card" id="paymentCard">
+      
+      <!-- Top Meta Details -->
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem;">
+        <div style="text-align: left;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Nomor Invoice</div>
+          <div id="invDisplay" style="font-family: var(--font-mono); font-weight: 700; font-size: 0.95rem; color: #fff;">...</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Kode Klaim Rahasia</div>
+          <div id="claimDisplay" style="font-family: var(--font-mono); font-weight: 700; font-size: 0.95rem; color: #a855f7;">...</div>
+        </div>
+      </div>
+
+      <div id="emailNotice" style="display: none; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 6px 12px; margin-bottom: 1.25rem; font-size: 0.8rem; color: #a5b4fc; text-align: center;">
+        ✉️ Bukti pembayaran & kode klaim akan otomatis dikirim ke: <strong id="buyerEmailDisplay" style="color: #fff;"></strong>
+      </div>
+
+      <!-- Pending QRIS State View -->
+      <div id="pendingView">
+        <div class="timer-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span>Sisa Waktu Bayar: </span>
+          <strong id="timerText" style="color: #fff;">15:00</strong>
+        </div>
+
+        <h2 style="font-size: 1.35rem; font-weight: 800; color: #fff; margin-bottom: 0.25rem;">Scan QRIS</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Buka aplikasi Shopee, BCA, GoPay, OVO, Dana, atau mobile banking Anda dan scan QR di bawah ini.</p>
+
+        <!-- QRIS Image Box -->
+        <div class="qris-box">
+          <img id="qrisImage" src="" alt="QRIS Loading..." class="qris-img">
+        </div>
+
+        <!-- Highlight Nominal Wajib Bayar -->
+        <div class="highlight-amount-box">
+          <div style="font-size: 0.78rem; text-transform: uppercase; color: #fbbf24; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 4px;">
+            ⚠️ Pastikan Nominal Transfer Wajib Tepat
+          </div>
+          <div id="totalAmountText" class="amount-huge">Rp 0</div>
+          <div id="uniqueCodeNote" style="font-size: 0.82rem; color: #d1d5db; margin-top: 6px;">
+            Termasuk 3 digit kode unik. <strong>Jangan bulatkan transfer</strong> agar otomatis terverifikasi sistem!
+          </div>
+        </div>
+
+        <div style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+          <button id="btnManualCheck" class="btn-submit" style="background: rgba(255,255,255,0.08); border: 1px solid var(--border-subtle); box-shadow: none;">
+            ⚡ Saya Sudah Bayar (Cek Mutasi Sekarang)
+          </button>
+          <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: pulse 1.5s infinite;"></span>
+            Sistem otomatis mengecek status mutasi setiap 3 detik...
+          </div>
+          <button type="button" id="btnCancelOrder" class="btn-cancel-order">
+            ✕ Batalkan Pesanan Ini
+          </button>
+        </div>
+      </div>
+
+      <!-- Paid & License Delivered View (Auto-Revealed!) -->
+      <div id="successView" style="display: none;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">🎉</div>
+        <h2 style="font-size: 1.5rem; font-weight: 800; color: #10b981; margin-bottom: 0.35rem;">Pembayaran Sukses!</h2>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">Pesanan Anda telah dipenuhi seketika dari DigitalCore. Lisensi siap digunakan.</p>
+
+        <div class="success-reveal-box">
+          <div style="font-weight: 700; font-size: 0.95rem; color: #fff; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+            <span>Produk: <span id="sProdName" style="color: #60a5fa;"></span></span>
+            <span id="sProdWarranty" class="badge badge-warranty"></span>
+          </div>
+
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 600;">LISENSI / LINK AKTIVASI ANDA:</div>
+          <div id="itemsContainer">
+            <!-- License items rendered here -->
+          </div>
+
+          <div id="warrantyAlert" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px; padding: 0.85rem; margin-top: 1rem; font-size: 0.82rem; color: #fbbf24;">
+            💡 <strong>Panduan Aktivasi:</strong> Segera lakukan klaim/aktivasi lisensi sesuai batas waktu garansi di atas.
+          </div>
+        </div>
+
+        <div style="margin-top: 1.75rem; display: flex; gap: 0.75rem;">
+          <a href="/" class="btn-submit" style="text-decoration: none; text-align: center; flex: 1;">Belanja Lagi</a>
+          <button id="copyAllKeysBtn" class="btn-nav" style="padding: 0.75rem 1rem;">Salin Semua</button>
+        </div>
+      </div>
+
+      <!-- Expired View -->
+      <div id="expiredView" style="display: none;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">⌛</div>
+        <h2 style="font-size: 1.35rem; font-weight: 800; color: #f87171; margin-bottom: 0.5rem;">Tagihan QRIS Kedaluwarsa</h2>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.5rem;">Batas waktu 15 menit telah habis. Jika Anda belum transfer, silakan buat pesanan baru.</p>
+        <a href="/" class="btn-submit" style="text-decoration: none; display: block;">Buat Pesanan Baru</a>
+      </div>
+
+      <!-- Cancelled View -->
+      <div id="cancelledView" style="display: none;">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">✕</div>
+        <h2 style="font-size: 1.35rem; font-weight: 800; color: #94a3b8; margin-bottom: 0.5rem;">Pesanan Telah Dibatalkan</h2>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.5rem;">Transaksi ini telah dibatalkan. Tagihan QRIS tidak lagi berlaku dan tidak dapat dibayar.</p>
+        <a href="/" class="btn-submit" style="text-decoration: none; display: block;">Kembali ke Katalog Toko</a>
+      </div>
+
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle); font-size: 0.82rem; color: var(--text-muted); text-align: center;">
+        Mengalami kendala scan atau transfer? <a href="https://t.me/storeku_support" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; font-weight: 600; text-decoration: underline;">Hubungi CS Telegram 24/7</a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Batal Pesanan -->
+  <div class="modal-overlay" id="cancelConfirmModal">
+    <div class="modal-card cancel-modal-card">
+      <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">⚠️</div>
+      <h3 class="cancel-modal-title">Batalkan Pesanan Ini?</h3>
+      <p class="cancel-modal-desc">
+        Tagihan QRIS ini akan dinonaktifkan. Anda dapat membuat pesanan baru kapan saja jika berubah pikiran.
+      </p>
+      <div class="cancel-modal-actions">
+        <button type="button" id="btnDismissCancelModal" class="btn-modal-back">Kembali</button>
+        <button type="button" id="btnConfirmCancelAction" class="btn-modal-confirm-cancel">Ya, Batalkan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Telegram Support Button -->
+  <a href="https://t.me/storeku_support" target="_blank" rel="noopener noreferrer" class="floating-telegram-btn" title="Hubungi CS Telegram 24/7">
+    <svg class="floating-telegram-icon" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .36z"/>
+    </svg>
+    <span>Chat CS Telegram</span>
+  </a>
+
+  <div id="toast" class="toast-notice"></div>
+
+  <style>
+    @keyframes pulse {
+      0% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.1); }
+      100% { opacity: 0.4; transform: scale(0.9); }
+    }
+  </style>
+
+  <script src="/js/order-history.js"></script>
+  <script src="/js/payment.js"></script>
+</body>
+</html>

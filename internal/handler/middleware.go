@@ -1,0 +1,63 @@
+package handler
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"strings"
+
+	"storeku/internal/config"
+)
+
+// GenerateAdminToken generates a deterministic signature for admin session
+func GenerateAdminToken(secretKey string) string {
+	h := hmac.New(sha256.New, []byte(secretKey))
+	h.Write([]byte("storeku_admin_authenticated_session"))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// AdminAuthMiddleware validates admin session cookie or Authorization header
+func AdminAuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	expectedToken := GenerateAdminToken(cfg.AdminSecretKey)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check cookie
+			if cookie, err := r.Cookie("storeku_admin_session"); err == nil && cookie.Value == expectedToken {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Check Authorization Bearer
+			authHeader := r.Header.Get("Authorization")
+			if authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" && parts[1] == expectedToken {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"success": false, "error": "Unauthorized admin access"}`))
+		})
+	}
+}
+
+// CORSMiddleware allows frontend clients and payment webhooks to connect
+func CORSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Webhook-Event")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}

@@ -1,0 +1,195 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
+
+	"storeku/internal/config"
+	"storeku/internal/database"
+	"storeku/internal/handler"
+	"storeku/internal/repository"
+	"storeku/internal/service"
+)
+
+func main() {
+	log.Println("🚀 Starting StoreKu Digital Goods System...")
+
+	// 1. Load Configuration
+	cfg := config.LoadConfig()
+
+	// 2. Initialize Database
+	db, err := database.InitDB(cfg.DatabasePath)
+	if err != nil {
+		log.Fatalf("Fatal: Database initialization failed: %v", err)
+	}
+
+	// 3. Initialize Repositories
+	settingRepo := repository.NewSettingRepository(db)
+	orderRepo := repository.NewOrderRepository(db)
+	overrideRepo := repository.NewProductOverrideRepository(db)
+
+	// 4. Initialize Services
+	pricingService := service.NewPricingService(cfg, settingRepo)
+	dcClient := service.NewDigitalCoreClient(cfg, pricingService, overrideRepo)
+	pgClient := service.NewPaymentGClient(cfg)
+	resendService := service.NewResendService(cfg)
+	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
+
+	// 5. Initialize Handlers
+	publicHandler := handler.NewPublicHandler(dcClient, orderService)
+	webhookHandler := handler.NewWebhookHandler(orderService)
+	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, dcClient, orderService)
+
+	// 6. Router Setup
+	r := chi.NewRouter()
+
+	// Global Middlewares
+	r.Use(chimw.Logger)
+	r.Use(chimw.Recoverer)
+	r.Use(handler.CORSMiddleware)
+
+	// API Routes
+	r.Route("/api", func(r chi.Router) {
+		// Public Store API
+		r.Get("/products", publicHandler.GetProducts)
+		r.Get("/products/{slug}", publicHandler.GetProductDetail)
+		r.Post("/checkout", publicHandler.CreateCheckout)
+		r.Get("/orders/{invoice}/status", publicHandler.GetOrderStatus)
+		r.Post("/orders/{invoice}/check", publicHandler.TriggerCheck)
+		r.Post("/orders/{invoice}/cancel", publicHandler.CancelOrder)
+		r.Get("/claim", publicHandler.ClaimProduct)
+
+		// PaymentG Webhook Receiver
+		r.Post("/webhook/paymentg", webhookHandler.HandlePaymentGWebhook)
+
+		// Admin Auth
+		r.Post("/admin/login", adminHandler.Login)
+		r.Post("/admin/logout", adminHandler.Logout)
+
+		// Protected Admin Panel
+		r.Group(func(r chi.Router) {
+			r.Use(handler.AdminAuthMiddleware(cfg))
+			r.Get("/admin/stats", adminHandler.GetStats)
+			r.Get("/admin/products", adminHandler.ListProducts)
+			r.Post("/admin/products/{slug}", adminHandler.SaveProductOverride)
+			r.Post("/admin/products/{slug}/reset", adminHandler.ResetProductOverride)
+			r.Get("/admin/orders", adminHandler.ListOrders)
+			r.Post("/admin/retry", adminHandler.RetryFulfillment)
+			r.Post("/admin/orders/{invoice}/force-fulfill", adminHandler.ForceFulfill)
+			r.Post("/admin/orders/{invoice}/mark-refunded", adminHandler.MarkRefunded)
+			r.Get("/admin/settings", adminHandler.GetSettings)
+			r.Post("/admin/settings", adminHandler.SaveSettings)
+		})
+	})
+
+	// 7. Clean URL Page Handlers & Static Serving
+	workDir, _ := os.Getwd()
+	webDir := filepath.Join(workDir, "web")
+
+	// Static Assets (css, js)
+	r.Handle("/css/*", http.StripPrefix("/css/", http.FileServer(http.Dir(filepath.Join(webDir, "css")))))
+	r.Handle("/js/*", http.StripPrefix("/js/", http.FileServer(http.Dir(filepath.Join(webDir, "js")))))
+
+	// 301 Permanent Redirects for legacy .html URLs
+	cleanRedirects := map[string]string{
+		"/index.html":          "/",
+		"/product.html":        "/product",
+		"/payment.html":        "/payment",
+		"/claim.html":          "/claim",
+		"/about.html":          "/about",
+		"/how-to-buy.html":     "/how-to-buy",
+		"/warranty.html":       "/warranty",
+		"/privacy.html":        "/privacy",
+		"/terms.html":          "/terms",
+		"/admin/index.html":    "/admin",
+		"/admin/login.html":    "/admin/login",
+		"/admin/products.html": "/admin/products",
+		"/admin/orders.html":   "/admin/orders",
+		"/admin/settings.html": "/admin/settings",
+	}
+	for oldPath, newPath := range cleanRedirects {
+		target := newPath
+		r.Get(oldPath, func(w http.ResponseWriter, r *http.Request) {
+			dest := target
+			if r.URL.RawQuery != "" {
+				dest += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, dest, http.StatusMovedPermanently)
+		})
+	}
+
+	// Clean Public Page Handlers
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+	})
+	r.Get("/product", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "product.html"))
+	})
+	r.Get("/payment", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "payment.html"))
+	})
+	r.Get("/claim", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "claim.html"))
+	})
+	r.Get("/about", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "about.html"))
+	})
+	r.Get("/how-to-buy", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "how-to-buy.html"))
+	})
+	r.Get("/warranty", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "warranty.html"))
+	})
+	r.Get("/privacy", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "privacy.html"))
+	})
+	r.Get("/terms", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "terms.html"))
+	})
+
+	// Clean Admin Page Handlers
+	r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "index.html"))
+	})
+	r.Get("/admin/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin", http.StatusMovedPermanently)
+	})
+	r.Get("/admin/login", func(w http.ResponseWriter, r *http.Request) {
+		expectedToken := handler.GenerateAdminToken(cfg.AdminSecretKey)
+		if cookie, err := r.Cookie("storeku_admin_session"); err == nil && cookie.Value == expectedToken {
+			http.Redirect(w, r, "/admin", http.StatusFound)
+			return
+		}
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "login.html"))
+	})
+	r.Get("/admin/products", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "products.html"))
+	})
+	r.Get("/admin/orders", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "orders.html"))
+	})
+	r.Get("/admin/settings", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "settings.html"))
+	})
+
+	addr := fmt.Sprintf(":%s", cfg.Port)
+	log.Printf("==================================================")
+	log.Printf(" StoreKu is live on http://localhost:%s", cfg.Port)
+	log.Printf(" 🛍️  Katalog & Toko : http://localhost:%s/", cfg.Port)
+	log.Printf(" 🔑  Klaim Lisensi  : http://localhost:%s/claim", cfg.Port)
+	log.Printf(" ⚙️  Panel Admin    : http://localhost:%s/admin", cfg.Port)
+	log.Printf(" 📡  PaymentG URL   : %s", cfg.PaymentGAPIURL)
+	log.Printf(" 📦  DigitalCore URL: %s", cfg.DigitalCoreBaseURL)
+	log.Printf(" 📧  Resend Sender  : %s", cfg.ResendFromEmail)
+	log.Printf("==================================================")
+
+	if err := http.ListenAndServe(addr, r); err != nil {
+		log.Fatalf("Server exited with error: %v", err)
+	}
+}

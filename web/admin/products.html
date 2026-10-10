@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manajemen Produk - Admin StoreKu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+
+  <!-- Top Navbar -->
+  <header class="navbar">
+    <div class="nav-container" style="max-width: 1400px;">
+      <a href="/admin" class="logo-wrap">
+        <div class="logo-badge" style="background: linear-gradient(135deg, #f59e0b, #ef4444);">⚙️</div>
+        <span>StoreKu Admin</span>
+      </a>
+      <div class="nav-actions">
+        <a href="/" target="_blank" class="btn-nav">Lihat Toko ↗</a>
+        <button id="btnRefreshStats" class="btn-nav">🔄 Refresh</button>
+        <button id="btnLogout" class="btn-nav" style="color: #f87171;">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="admin-container">
+    
+    <!-- Admin Navigation Tabs -->
+    <nav class="admin-nav-tabs">
+      <a href="/admin" class="admin-nav-tab">📊 Ringkasan Dashboard</a>
+      <a href="/admin/products" class="admin-nav-tab active">📦 Manajemen Produk</a>
+      <a href="/admin/orders" class="admin-nav-tab">📜 Riwayat Pesanan</a>
+      <a href="/admin/settings" class="admin-nav-tab">⚙️ Pengaturan Toko</a>
+    </nav>
+
+    <!-- Header Row -->
+    <div class="admin-header-row">
+      <div class="admin-title-wrap">
+        <h1>Katalog & Kustomisasi Produk</h1>
+        <p>Atur harga jual khusus, judul, deskripsi, ketentuan garansi, atau sembunyikan produk dari toko pembeli.</p>
+      </div>
+      <div>
+        <span class="badge badge-stock" id="totalProdsBadge">Memuat...</span>
+      </div>
+    </div>
+
+    <!-- Products Stats Banner -->
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.5rem;">
+      <div class="stat-card" style="padding: 1rem;">
+        <div class="stat-label">Total Upstream</div>
+        <div class="stat-value" id="cntTotalProds" style="font-size: 1.4rem;">0</div>
+      </div>
+      <div class="stat-card" style="padding: 1rem;">
+        <div class="stat-label">Aktif di Toko</div>
+        <div class="stat-value highlight-green" id="cntActiveProds" style="font-size: 1.4rem;">0</div>
+      </div>
+      <div class="stat-card" style="padding: 1rem;">
+        <div class="stat-label">Disembunyikan</div>
+        <div class="stat-value" id="cntHiddenProds" style="font-size: 1.4rem; color: #f87171;">0</div>
+      </div>
+      <div class="stat-card" style="padding: 1rem;">
+        <div class="stat-label">Harga / Judul Custom</div>
+        <div class="stat-value highlight-gold" id="cntCustomProds" style="font-size: 1.4rem;">0</div>
+      </div>
+    </div>
+
+    <!-- Filter and Search Row -->
+    <div class="section-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="flex: 1; min-width: 260px; max-width: 450px;">
+          <input type="text" id="searchProdInput" class="form-input" placeholder="🔍 Cari nama produk, slug, atau kategori..." style="padding: 0.6rem 1rem;">
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <button class="tag-btn active" data-pfilter="ALL">Semua Produk</button>
+          <button class="tag-btn" data-pfilter="ACTIVE">Aktif Saja</button>
+          <button class="tag-btn" data-pfilter="HIDDEN">Disembunyikan</button>
+          <button class="tag-btn" data-pfilter="CUSTOM">Kustomisasi Saja</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Products Data Table -->
+    <div class="section-card">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Produk & Tipe</th>
+              <th>Stok & Region</th>
+              <th>Modal Upstream</th>
+              <th>Harga Acuan (IDR)</th>
+              <th>Harga Promo (IDR)</th>
+              <th>Status di Toko</th>
+              <th style="text-align: right;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="adminProductsTableBody">
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+                Memuat katalog produk...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modal Edit Kustomisasi Produk -->
+  <div class="modal-overlay" id="editProductModal">
+    <div class="modal-card" style="max-width: 640px;">
+      <div class="modal-header">
+        <h3 class="modal-title">✏️ Kustomisasi Produk</h3>
+        <button class="modal-close" id="closeEditModalBtn">&times;</button>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 12px 16px; margin-bottom: 1.25rem;">
+        <img id="edProdLogo" src="" alt="" style="width: 48px; height: 48px; border-radius: 10px; object-fit: cover; border: 1px solid var(--border-subtle);">
+        <div style="flex: 1;">
+          <div id="edOriginalName" style="font-weight: 700; color: #fff; font-size: 1rem;"></div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+            Slug: <span id="edProdSlug" style="font-family: var(--font-mono); color: #94a3b8;"></span> • Modal: <span id="edProdUSD" style="color:#fbbf24; font-weight: 600;"></span> (<span id="edProdModalIDR" style="color:#38bdf8; font-weight: 600;"></span>) • Default Env: <span id="edProdEnvPrice" style="color:#10b981; font-weight: 600;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toggle Status Tampil -->
+      <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 10px; border: 1px solid var(--border-subtle);">
+        <div class="switch-container">
+          <label class="switch">
+            <input type="checkbox" id="edIsActive" checked>
+            <span class="slider"></span>
+          </label>
+          <div>
+            <div style="font-weight: 700; font-size: 0.92rem; color: #fff;">Tampilkan Produk di Toko</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">Jika dinonaktifkan, produk tidak akan muncul di katalog pembeli dan tidak dapat dicheckout.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Title -->
+      <div class="form-group">
+        <label class="form-label" for="edCustomName">Judul Produk Kustom (Opsional)</label>
+        <input type="text" id="edCustomName" class="form-input" placeholder="Biarkan kosong jika ingin memakai judul asli">
+        <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 4px;">Nama ini yang akan dilihat oleh pembeli di toko & invoice.</div>
+      </div>
+
+      <!-- Custom Price IDR (Harga Acuan) -->
+      <div class="form-group">
+        <label class="form-label" for="edCustomPrice">Harga Jual Acuan (Rp)</label>
+        <input type="number" id="edCustomPrice" class="form-input" placeholder="0">
+        <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 4px;">
+          Batas minimal: <strong id="edMinPriceNotice" style="color:#10b981;"></strong> (Harga default bawaan sistem). Nilai ini menjadi harga acuan / coret saat promo aktif.
+        </div>
+      </div>
+
+      <!-- Promo Price IDR -->
+      <div class="form-group">
+        <label class="form-label" for="edPromoPrice">Harga Promo (Rp) (Opsional)</label>
+        <input type="number" id="edPromoPrice" class="form-input" placeholder="Kosongkan jika tidak ada promo">
+        <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 4px;">
+          Batas minimal: <strong id="edMinPromoNotice" style="color:#fbbf24;"></strong> (Harga modal toko). Jika diisi, harga ini menimpa harga acuan sebagai harga bayar dan memunculkan badge diskon % OFF.
+        </div>
+      </div>
+
+      <!-- Custom Description -->
+      <div class="form-group">
+        <label class="form-label" for="edCustomDesc">Isi Detail / Deskripsi Kustom (Opsional)</label>
+        <textarea id="edCustomDesc" class="form-input" rows="3" placeholder="Biarkan kosong jika ingin memakai deskripsi bawaan DigitalCore..."></textarea>
+      </div>
+
+      <!-- Custom Terms -->
+      <div class="form-group">
+        <label class="form-label" for="edCustomTerms">Syarat & Ketentuan Pembelian (Default: Membeli berarti setuju)</label>
+        <textarea id="edCustomTerms" class="form-input" rows="2" placeholder="Membeli berarti setuju..."></textarea>
+      </div>
+
+      <!-- Buttons -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; gap: 10px;">
+        <button id="btnResetProduct" class="btn-nav" style="color: #f87171; border-color: rgba(239,68,68,0.3);">
+          ↺ Reset ke Bawaan
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button id="btnCancelEdit" class="btn-nav">Batal</button>
+          <button id="btnSaveProduct" class="btn-buy" style="padding: 0.55rem 1.5rem;">Simpan Kustomisasi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast-notice"></div>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>

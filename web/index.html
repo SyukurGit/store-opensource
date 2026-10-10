@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StoreKu - Produk & Lisensi Premium Instan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="/" class="logo-wrap">
+        <div class="logo-badge">⚡</div>
+        <span>StoreKu</span>
+      </a>
+      <div class="nav-actions">
+        <a href="https://t.me/storeku_support?text=Halo%20StoreKu%2C%20saya%20tertarik%20join%20Reseller%20(Harga%20Lebih%20Murah)" target="_blank" rel="noopener noreferrer" class="btn-nav btn-reseller">
+          🤝 Join Reseller <span class="reseller-tag">Harga Lebih Murah</span>
+        </a>
+        <a href="/claim" class="btn-nav">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <span class="nav-text-desktop">Klaim Produk</span>
+          <span class="nav-text-mobile">Klaim</span>
+        </a>
+        <button id="openHistoryBtn" class="btn-nav">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span class="nav-text-desktop">Pesanan Saya</span>
+          <span class="nav-text-mobile">Pesanan</span>
+          <span id="historyBadge" class="badge-counter" style="display:none;">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <h1>Produk & Lisensi Premium Instan</h1>
+    <p>Beli lisensi premium cepat, mudah, dan tanpa perlu ribet login. Pembayaran multi-bank & e-wallet otomatis via QRIS.</p>
+
+    <!-- Search & Filter Bar -->
+    <div class="search-filter-wrap">
+      <div class="search-input-box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="searchInput" class="search-input" placeholder="Cari produk (Gemini, ChatGPT, VPN, Adobe, YouTube...)...">
+      </div>
+      <div class="filter-tags" id="filterTags">
+        <button class="tag-btn active" data-filter="all">Semua</button>
+        <button class="tag-btn" data-filter="ai">AI Tools</button>
+        <button class="tag-btn" data-filter="vpn">VPN & Security</button>
+        <button class="tag-btn" data-filter="stream">Streaming & Media</button>
+        <button class="tag-btn" data-filter="edu">Edukasi & Kerja</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Product Catalog Grid -->
+  <main class="products-section">
+    <div id="loadingCatalog" style="text-align: center; padding: 4rem; color: var(--text-muted);">
+      <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⏳</div>
+      Memuat katalog produk & stok real-time dari DigitalCore...
+    </div>
+
+    <div class="products-grid" id="productsGrid" style="display: none;"></div>
+
+    <div id="emptyCatalog" style="display: none; text-align: center; padding: 4rem; color: var(--text-muted);">
+      Tidak ada produk yang cocok dengan pencarian Anda.
+    </div>
+  </main>
+
+  <!-- Modal Checkout -->
+  <div class="modal-overlay" id="checkoutModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" id="checkoutModalTitle">Checkout Pesanan</h3>
+        <button class="modal-close" id="closeCheckoutBtn">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Produk Terpilih</label>
+        <div style="display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+          <img id="mProdLogo" src="" alt="" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover;">
+          <div>
+            <div id="mProdName" style="font-weight: 700; color: #fff;"></div>
+            <div id="mProdType" style="font-size: 0.78rem; color: var(--text-muted);"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="qtyInput">Jumlah Pembelian (Qty)</label>
+        <input type="number" id="qtyInput" class="form-input" min="1" max="100" value="1">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="emailInput">Email Pembeli <span style="color:#ef4444;">*</span> (Wajib untuk kirim kode klaim)</label>
+        <input type="email" id="emailInput" class="form-input" placeholder="contoh: nama@gmail.com" required>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Kode klaim & ringkasan belanja otomatis dikirim ke email ini via <strong>syukurapi.online</strong>.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="contactInput">Kontak WhatsApp / Catatan (Opsional)</label>
+        <input type="text" id="contactInput" class="form-input" placeholder="08xxxxxxxxxx atau username Telegram">
+      </div>
+
+      <div class="order-summary-box">
+        <div class="summary-row">
+          <span>Harga Satuan</span>
+          <span id="mUnitPrice">Rp 0</span>
+        </div>
+        <div class="summary-row">
+          <span>Jumlah</span>
+          <span id="mQtyDisplay">x 1</span>
+        </div>
+        <div class="summary-row">
+          <span>Metode Pembayaran</span>
+          <span style="color: #60a5fa; font-weight: 600;">QRIS ShopeePay</span>
+        </div>
+        <div class="summary-row total">
+          <span>Estimasi Subtotal</span>
+          <span id="mTotalPrice" style="color: #10b981;">Rp 0</span>
+        </div>
+      </div>
+
+      <button id="btnConfirmCheckout" class="btn-submit">
+        Bayar Sekarang via QRIS ➔
+      </button>
+    </div>
+  </div>
+
+  <!-- Drawer / Modal Riwayat Pesanan Saya (LocalStorage) -->
+  <div class="modal-overlay" id="historyModal">
+    <div class="modal-card" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Riwayat Pesanan Saya</h3>
+        <button class="modal-close" id="closeHistoryBtn">&times;</button>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Riwayat ini tersimpan otomatis di browser Anda tanpa perlu akun login. Anda dapat membuka atau mengklaim kembali lisensi kapan saja.
+      </div>
+      <div id="historyListContainer" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 400px; overflow-y: auto;">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-streamlined-grid">
+        <!-- Kolom 1: Profil Brand Ringkas & Berbobot -->
+        <div class="footer-col-brand">
+          <a href="/" class="brand-logo-row">
+            <div class="logo-badge">⚡</div>
+            <span class="brand-name">StoreKu</span>
+          </a>
+          <p class="footer-brand-desc">
+            Penyedia produk digital & lisensi premium instan 24/7. Transaksi otomatis tanpa ribet login, aman, dan bergaransi penuh.
+          </p>
+          <div class="footer-trust-pill">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Garansi Ganti Baru 100%</span>
+          </div>
+        </div>
+
+        <!-- Kolom 2: Tautan Akses Ringkas -->
+        <div class="footer-col-links">
+          <h5>Navigasi Toko</h5>
+          <div class="footer-nav-tags">
+            <a href="/">⚡ Katalog</a>
+            <a href="/claim">🔑 Klaim Produk</a>
+            <a href="/how-to-buy">📖 Panduan</a>
+            <a href="/warranty">🛡️ Garansi</a>
+            <a href="/privacy">🔒 Privasi</a>
+            <a href="/terms">📜 Ketentuan</a>
+            <a href="/about">🏢 Tentang Kami</a>
+          </div>
+        </div>
+
+        <!-- Kolom 3: Kemitraan Reseller & Bantuan CS -->
+        <div class="footer-col-action">
+          <h5>Kemitraan & CS</h5>
+          <a href="https://t.me/storeku_support?text=Halo%20StoreKu%2C%20saya%20tertarik%20join%20Reseller%20(Harga%20Lebih%20Murah)" target="_blank" rel="noopener noreferrer" class="footer-reseller-card">
+            <div class="reseller-badge-mini">PROMO KHUSUS</div>
+            <div class="reseller-title">🤝 Join Reseller</div>
+            <div class="reseller-sub">Dapatkan harga khusus jauh lebih murah via Telegram ➔</div>
+          </a>
+          <a href="https://t.me/storeku_support" target="_blank" rel="noopener noreferrer" class="footer-cs-link">
+            💬 Bantuan CS Telegram 24/7
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-bottom-simple">
+        <div>&copy; 2026 StoreKu. Seluruh hak cipta dilindungi.</div>
+        <div class="footer-status-pill">⚡ Sistem Otomatis Online 24/7</div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Floating Telegram Support Button -->
+  <a href="https://t.me/storeku_support" target="_blank" rel="noopener noreferrer" class="floating-telegram-btn" title="Hubungi CS Telegram 24/7">
+    <svg class="floating-telegram-icon" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .36z"/>
+    </svg>
+    <span>Chat CS Telegram</span>
+  </a>
+
+  <!-- Toast Container -->
+  <div id="toast" class="toast-notice"></div>
+
+  <script src="/js/order-history.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

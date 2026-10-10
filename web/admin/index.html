@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Admin - StoreKu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+
+  <!-- Top Navbar -->
+  <header class="navbar">
+    <div class="nav-container" style="max-width: 1400px;">
+      <a href="/admin" class="logo-wrap">
+        <div class="logo-badge" style="background: linear-gradient(135deg, #f59e0b, #ef4444);">⚙️</div>
+        <span>StoreKu Admin</span>
+      </a>
+      <div class="nav-actions">
+        <a href="/" target="_blank" class="btn-nav">Lihat Toko ↗</a>
+        <button id="btnRefreshStats" class="btn-nav">🔄 Refresh</button>
+        <button id="btnLogout" class="btn-nav" style="color: #f87171;">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="admin-container">
+    
+    <!-- Admin Navigation Tabs -->
+    <nav class="admin-nav-tabs">
+      <a href="/admin" class="admin-nav-tab active">📊 Ringkasan Dashboard</a>
+      <a href="/admin/products" class="admin-nav-tab">📦 Manajemen Produk</a>
+      <a href="/admin/orders" class="admin-nav-tab">📜 Riwayat Pesanan</a>
+      <a href="/admin/settings" class="admin-nav-tab">⚙️ Pengaturan Toko</a>
+    </nav>
+
+    <!-- Header Row -->
+    <div class="admin-header-row">
+      <div class="admin-title-wrap">
+        <h1>Dashboard Monitoring Toko</h1>
+        <p>Pantau pembayaran QRIS, perputaran omzet, dan saldo stok DigitalCore secara real-time.</p>
+      </div>
+      <div>
+        <span class="badge badge-stock" id="apiStatusBadge">● Gateway & Upstream Connected</span>
+      </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">
+          <span>Total Omzet Toko</span>
+          <span>💰</span>
+        </div>
+        <div class="stat-value highlight-green" id="statRevenue">Rp 0</div>
+        <div class="stat-meta">Dari <strong id="statPaidCount" style="color:#fff;">0</strong> pesanan lunas</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">
+          <span>Saldo DigitalCore Bot</span>
+          <span>🤖</span>
+        </div>
+        <div class="stat-value highlight-gold" id="statDcBalance">$0.00</div>
+        <div class="stat-meta">Total order DC: <strong id="statDcOrders" style="color:#fff;">0</strong></div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">
+          <span>Hari Ini</span>
+          <span>📅</span>
+        </div>
+        <div class="stat-value" id="statTodayRevenue">Rp 0</div>
+        <div class="stat-meta"><strong id="statTodayOrders" style="color:#fff;">0</strong> pesanan dibuat hari ini</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">
+          <span>Status Transaksi</span>
+          <span>📊</span>
+        </div>
+        <div style="display: flex; gap: 16px; margin-top: 6px;">
+          <div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">MENUNGGU</div>
+            <div style="font-size: 1.25rem; font-weight: 800; color: #fbbf24;" id="statPendingCount">0</div>
+          </div>
+          <div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">GAGAL STOK</div>
+            <div style="font-size: 1.25rem; font-weight: 800; color: #f87171;" id="statFailedCount">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Navigation Shortcuts -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+      <a href="/admin/products" class="stat-card" style="text-decoration: none; border-color: rgba(99, 102, 241, 0.3); transition: transform 0.2s;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="font-size: 1.75rem;">📦</div>
+          <span style="font-size: 0.8rem; color: #818cf8; font-weight: 700;">Kelola Katalog ➔</span>
+        </div>
+        <div style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-top: 4px;">Manajemen Produk</div>
+        <div style="font-size: 0.82rem; color: var(--text-muted);">Atur harga khusus, nama, deskripsi, terms, atau sembunyikan produk dari toko.</div>
+      </a>
+
+      <a href="/admin/orders" class="stat-card" style="text-decoration: none; border-color: rgba(16, 185, 129, 0.3); transition: transform 0.2s;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="font-size: 1.75rem;">📜</div>
+          <span style="font-size: 0.8rem; color: #34d399; font-weight: 700;">Semua Pesanan ➔</span>
+        </div>
+        <div style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-top: 4px;">Riwayat Transaksi</div>
+        <div style="font-size: 0.82rem; color: var(--text-muted);">Pantau status invoice, kode klaim pembeli, lisensi yang terkirim, dan retry fulfillment.</div>
+      </a>
+
+      <a href="/admin/settings" class="stat-card" style="text-decoration: none; border-color: rgba(245, 158, 11, 0.3); transition: transform 0.2s;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="font-size: 1.75rem;">⚙️</div>
+          <span style="font-size: 0.8rem; color: #fbbf24; font-weight: 700;">Atur Margin ➔</span>
+        </div>
+        <div style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-top: 4px;">Kurs & Pengaturan Toko</div>
+        <div style="font-size: 0.82rem; color: var(--text-muted);">Sesuaikan kurs USD-IDR dan persentase keuntungan global toko secara otomatis.</div>
+      </a>
+    </div>
+
+    <!-- Recent Orders Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">⏱️ 5 Transaksi Terbaru</h2>
+        <a href="/admin/orders" class="tag-btn active" style="text-decoration: none;">Buka Semua Transaksi ➔</a>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Invoice & Waktu</th>
+              <th>Produk & Qty</th>
+              <th>Total Bayar</th>
+              <th>Status Bayar</th>
+              <th>Fulfillment DC</th>
+              <th>Kode Klaim</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTableBody">
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                Memuat data pesanan terbaru...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modal Detail Order / Lisensi -->
+  <div class="modal-overlay" id="orderDetailModal">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Detail Lisensi Pesanan</h3>
+        <button class="modal-close" id="closeDetailModalBtn">&times;</button>
+      </div>
+      <div id="modalDetailContent"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast-notice"></div>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>
