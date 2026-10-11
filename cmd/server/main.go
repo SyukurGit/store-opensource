@@ -64,10 +64,14 @@ func main() {
 	// Global Middlewares
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
-	r.Use(handler.CORSMiddleware)
+	r.Use(handler.NewCORSMiddleware(cfg))
+
+	// System Health Check (For VPS Monitoring, Uptime Kuma, Cloudflare health checks)
+	r.Get("/health", publicHandler.HealthCheck)
 
 	// API Routes
 	r.Route("/api", func(r chi.Router) {
+		r.Get("/health", publicHandler.HealthCheck)
 		// Public Store API
 		r.Get("/config", publicHandler.GetAppConfig)
 		r.Get("/products", publicHandler.GetProducts)
@@ -177,7 +181,10 @@ func main() {
 	})
 	r.Get("/admin/login", func(w http.ResponseWriter, r *http.Request) {
 		expectedToken := handler.GenerateAdminToken(cfg.AdminSecretKey)
-		cookie, err := r.Cookie("digihub_admin_session")
+		cookie, err := r.Cookie("digimest_admin_session")
+		if err != nil {
+			cookie, err = r.Cookie("digihub_admin_session")
+		}
 		if err != nil {
 			cookie, err = r.Cookie("storeku_admin_session")
 		}
@@ -199,7 +206,7 @@ func main() {
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("==================================================")
-	log.Printf(" Digihub is live on http://localhost:%s", cfg.Port)
+	log.Printf(" Digimest is live on http://localhost:%s (Domain: Digimest.tech)", cfg.Port)
 	log.Printf(" 🛍️  Katalog & Toko : http://localhost:%s/", cfg.Port)
 	log.Printf(" 🔑  Klaim Lisensi  : http://localhost:%s/claim", cfg.Port)
 	log.Printf(" ⚙️  Panel Admin    : http://localhost:%s/admin", cfg.Port)

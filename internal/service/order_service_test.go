@@ -266,4 +266,44 @@ func TestManualMarkPaidAndFulfill(t *testing.T) {
 	}
 }
 
+func TestProductOverrideForceOutOfStockRepo(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("failed to init test db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewProductOverrideRepository(db)
+	err = repo.Upsert(&models.ProductOverride{
+		ProductSlug:       "netflix-1m",
+		CustomName:        "Netflix 1 Bulan",
+		IsActive:          true,
+		IsForceOutOfStock: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to upsert override: %v", err)
+	}
+
+	ov, err := repo.GetBySlug("netflix-1m")
+	if err != nil {
+		t.Fatalf("failed to get override: %v", err)
+	}
+	if ov == nil || !ov.IsForceOutOfStock {
+		t.Fatalf("expected IsForceOutOfStock true, got false")
+	}
+	if !ov.IsActive {
+		t.Fatalf("expected IsActive true, got false")
+	}
+
+	all, err := repo.GetAll()
+	if err != nil {
+		t.Fatalf("failed to get all overrides: %v", err)
+	}
+	if all["netflix-1m"] == nil || !all["netflix-1m"].IsForceOutOfStock {
+		t.Fatalf("expected GetAll to contain IsForceOutOfStock true")
+	}
+}
+
 

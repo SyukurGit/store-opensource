@@ -24,6 +24,7 @@ type Config struct {
 	ResendFromEmail         string
 	StoreBaseURL            string
 	TelegramSupportUsername string
+	AllowedOrigins          string
 }
 
 func LoadConfig() *Config {
@@ -44,9 +45,10 @@ func LoadConfig() *Config {
 		ProfitMarginPercent:     getEnvFloat("PROFIT_MARGIN_PERCENT", 25.0),
 		ProfitMarginFixed:       getEnvInt64("PROFIT_MARGIN_FIXED", 2000),
 		ResendAPIKey:            getEnv("RESEND_API_KEY", ""),
-		ResendFromEmail:         getEnv("RESEND_FROM_EMAIL", "Digihub <orders@syukurapi.online>"),
-		StoreBaseURL:            getEnv("STORE_BASE_URL", "http://localhost:8080"),
-		TelegramSupportUsername: getEnv("TELEGRAM_SUPPORT_USERNAME", "Digihubsupport"),
+		ResendFromEmail:         getEnv("RESEND_FROM_EMAIL", "Digimest <orders@digimest.tech>"),
+		StoreBaseURL:            getEnv("STORE_BASE_URL", "https://digimest.tech"),
+		TelegramSupportUsername: getEnv("TELEGRAM_SUPPORT_USERNAME", "Digimestsupport"),
+		AllowedOrigins:          getEnv("ALLOWED_ORIGINS", "https://digimest.tech,https://*.pages.dev,http://localhost:8080,http://127.0.0.1:8080"),
 	}
 
 	return cfg

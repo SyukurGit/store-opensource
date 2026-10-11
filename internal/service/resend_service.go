@@ -57,13 +57,13 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
 
 	fromEmail := s.cfg.ResendFromEmail
 	if fromEmail == "" {
-		fromEmail = "Digihub <orders@syukurapi.online>"
+		fromEmail = "Digimest <orders@digimest.tech>"
 	}
 
 	claimURL := fmt.Sprintf("%s/claim?code=%s", strings.TrimRight(s.cfg.StoreBaseURL, "/"), claimCode)
 	formattedTotal := fmt.Sprintf("Rp %s", formatNumber(totalAmount))
 
-	subject := fmt.Sprintf("Pembayaran Berhasil — Kode Klaim Digihub: %s", claimCode)
+	subject := fmt.Sprintf("Pembayaran Berhasil — Kode Klaim Digimest: %s", claimCode)
 	htmlContent := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -82,10 +82,10 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
           <tr>
             <td>
               <div style="font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; margin-bottom: 4px;">
-                ⚡ Digihub Digital
+                ⚡ Digimest Digital
               </div>
               <div style="font-size: 13px; color: #94a3b8; margin-bottom: 24px;">
-                Pusat Produk & Lisensi Digital Instan
+                Pusat Produk & Lisensi Digital Instan • Digimest.tech
               </div>
             </td>
           </tr>
@@ -130,7 +130,7 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
                   %s
                 </div>
                 <div style="font-size: 12px; color: #94a3b8; margin-top: 6px;">
-                  Gunakan kode di atas untuk mengambil lisensi/akun Anda kapan saja di Digihub.
+                  Gunakan kode di atas untuk mengambil lisensi/akun Anda kapan saja di Digimest.
                 </div>
               </div>
             </td>
@@ -139,7 +139,7 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
           <!-- Tombol CTA -->
           <tr>
             <td align="center" style="padding-bottom: 24px;">
-              <a href="%s" target="_blank" style="display: inline-block; background-color: #6366f1; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);">
+              <a href="%s" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);">
                 Buka & Ambil Lisensi Sekarang ➔
               </a>
             </td>
@@ -148,7 +148,7 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
           <!-- Footer Note -->
           <tr>
             <td style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px; font-size: 12px; color: #64748b; line-height: 1.5;">
-              Email ini dikirim otomatis oleh Digihub via domain resmi <strong>syukurapi.online</strong>.<br>
+              Email ini dikirim otomatis oleh Digimest via domain resmi <strong>Digimest.tech</strong>.<br>
               Jika Anda tidak merasa melakukan transaksi ini, abaikan email ini.
             </td>
           </tr>

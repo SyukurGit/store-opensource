@@ -20,7 +20,7 @@ func NewProductOverrideRepository(db *database.DB) *ProductOverrideRepository {
 // GetAll returns all product overrides mapped by product_slug
 func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride, error) {
 	query := `
-		SELECT product_slug, custom_name, custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, baseline_modal_idr, is_auto_suspended, created_at, updated_at
+		SELECT product_slug, custom_name, custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
 		FROM product_overrides
 	`
 	rows, err := r.db.Query(query)
@@ -32,7 +32,7 @@ func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride
 	result := make(map[string]*models.ProductOverride)
 	for rows.Next() {
 		var o models.ProductOverride
-		var isActiveInt, isAutoSuspendedInt int
+		var isActiveInt, isForceOutOfStockInt, isAutoSuspendedInt int
 		err := rows.Scan(
 			&o.ProductSlug,
 			&o.CustomName,
@@ -41,6 +41,7 @@ func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride
 			&o.CustomDescription,
 			&o.CustomTerms,
 			&isActiveInt,
+			&isForceOutOfStockInt,
 			&o.BaselineModalIDR,
 			&isAutoSuspendedInt,
 			&o.CreatedAt,
@@ -50,6 +51,7 @@ func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride
 			return nil, fmt.Errorf("failed to scan product override: %w", err)
 		}
 		o.IsActive = (isActiveInt == 1)
+		o.IsForceOutOfStock = (isForceOutOfStockInt == 1)
 		o.IsAutoSuspended = (isAutoSuspendedInt == 1)
 		result[o.ProductSlug] = &o
 	}
@@ -60,13 +62,13 @@ func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride
 // GetBySlug retrieves an override for a single product slug
 func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverride, error) {
 	query := `
-		SELECT product_slug, custom_name, custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, baseline_modal_idr, is_auto_suspended, created_at, updated_at
+		SELECT product_slug, custom_name, custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
 		FROM product_overrides
 		WHERE product_slug = ?
 		LIMIT 1
 	`
 	var o models.ProductOverride
-	var isActiveInt, isAutoSuspendedInt int
+	var isActiveInt, isForceOutOfStockInt, isAutoSuspendedInt int
 	err := r.db.QueryRow(query, slug).Scan(
 		&o.ProductSlug,
 		&o.CustomName,
@@ -75,6 +77,7 @@ func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverr
 		&o.CustomDescription,
 		&o.CustomTerms,
 		&isActiveInt,
+		&isForceOutOfStockInt,
 		&o.BaselineModalIDR,
 		&isAutoSuspendedInt,
 		&o.CreatedAt,
@@ -87,6 +90,7 @@ func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverr
 		return nil, fmt.Errorf("failed to get product override: %w", err)
 	}
 	o.IsActive = (isActiveInt == 1)
+	o.IsForceOutOfStock = (isForceOutOfStockInt == 1)
 	o.IsAutoSuspended = (isAutoSuspendedInt == 1)
 	return &o, nil
 }
@@ -94,8 +98,8 @@ func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverr
 // Upsert saves or updates a product override
 func (r *ProductOverrideRepository) Upsert(o *models.ProductOverride) error {
 	query := `
-		INSERT INTO product_overrides (product_slug, custom_name, custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, baseline_modal_idr, is_auto_suspended, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		INSERT INTO product_overrides (product_slug, custom_name, custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		ON CONFLICT(product_slug) DO UPDATE SET
 			custom_name = excluded.custom_name,
 			custom_price_idr = excluded.custom_price_idr,
@@ -103,6 +107,7 @@ func (r *ProductOverrideRepository) Upsert(o *models.ProductOverride) error {
 			custom_description = excluded.custom_description,
 			custom_terms = excluded.custom_terms,
 			is_active = excluded.is_active,
+			is_force_out_of_stock = excluded.is_force_out_of_stock,
 			baseline_modal_idr = excluded.baseline_modal_idr,
 			is_auto_suspended = excluded.is_auto_suspended,
 			updated_at = CURRENT_TIMESTAMP
@@ -110,6 +115,10 @@ func (r *ProductOverrideRepository) Upsert(o *models.ProductOverride) error {
 	isActiveInt := 0
 	if o.IsActive {
 		isActiveInt = 1
+	}
+	isForceOutOfStockInt := 0
+	if o.IsForceOutOfStock {
+		isForceOutOfStockInt = 1
 	}
 	isAutoSuspendedInt := 0
 	if o.IsAutoSuspended {
@@ -124,6 +133,7 @@ func (r *ProductOverrideRepository) Upsert(o *models.ProductOverride) error {
 		o.CustomDescription,
 		o.CustomTerms,
 		isActiveInt,
+		isForceOutOfStockInt,
 		o.BaselineModalIDR,
 		isAutoSuspendedInt,
 	)

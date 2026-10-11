@@ -18,6 +18,11 @@ func NewOrderRepository(db *database.DB) *OrderRepository {
 }
 
 func (r *OrderRepository) CreateOrder(o *models.Order) error {
+	if o.ExpiresAt != nil {
+		utc := o.ExpiresAt.UTC()
+		o.ExpiresAt = &utc
+	}
+
 	query := `
 		INSERT INTO orders (
 			invoice_number, claim_code, product_slug, product_name, product_type,
@@ -105,6 +110,10 @@ func (r *OrderRepository) UpdatePaymentStatus(invoice, status string, paidAt *ti
 }
 
 func (r *OrderRepository) UpdateGatewayDetails(invoice, gwID, qrURL string, uniqueCode int, totalAmount int64, expiresAt *time.Time) error {
+	if expiresAt != nil {
+		utc := expiresAt.UTC()
+		expiresAt = &utc
+	}
 	query := `
 		UPDATE orders
 		SET gateway_order_id = ?, qr_url = ?, unique_code = ?, total_amount = ?, expires_at = ?, updated_at = CURRENT_TIMESTAMP
@@ -130,7 +139,7 @@ func (r *OrderRepository) UpdateFulfillmentWithCost(invoice, status, errStr, dcO
 }
 
 func (r *OrderRepository) SweepExpiredOrders() (int64, error) {
-	now := time.Now()
+	nowUTC := time.Now().UTC()
 	query := `
 		UPDATE orders
 		SET payment_status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP
@@ -138,7 +147,7 @@ func (r *OrderRepository) SweepExpiredOrders() (int64, error) {
 		  AND expires_at IS NOT NULL
 		  AND expires_at < ?
 	`
-	res, err := r.db.Exec(query, now)
+	res, err := r.db.Exec(query, nowUTC)
 	if err != nil {
 		return 0, err
 	}

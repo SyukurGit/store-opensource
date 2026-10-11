@@ -87,6 +87,10 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		return nil, fmt.Errorf("produk '%s' tidak ditemukan atau sedang tidak aktif", req.ProductSlug)
 	}
 
+	if targetProduct.IsForceOutOfStock {
+		return nil, fmt.Errorf("stok produk '%s' sedang habis (dinonaktifkan sementara oleh toko)", targetProduct.Name)
+	}
+
 	if targetProduct.Stock > 0 && targetProduct.Stock < req.Quantity {
 		return nil, fmt.Errorf("stok tidak mencukupi (sisa: %d)", targetProduct.Stock)
 	}
@@ -121,7 +125,7 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	claimCode := fmt.Sprintf("CLM-%s", generateRandomString(6))
 
 	// 4. Request QRIS tagihan from PaymentG
-	metadata := fmt.Sprintf("Digihub: %s (Qty: %d)", targetProduct.Name, req.Quantity)
+	metadata := fmt.Sprintf("Digimest: %s (Qty: %d)", targetProduct.Name, req.Quantity)
 	pgOrder, err := s.pgClient.CreateQRISOrder(invoiceNumber, subtotalIDR, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat tagihan QRIS PaymentG: %w", err)
@@ -130,11 +134,12 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	var expiresAtTime *time.Time
 	if pgOrder.ExpiresAt != "" {
 		if t, err := time.Parse(time.RFC3339, pgOrder.ExpiresAt); err == nil {
-			expiresAtTime = &t
+			tUTC := t.UTC()
+			expiresAtTime = &tUTC
 		}
 	}
 	if expiresAtTime == nil {
-		t := time.Now().Add(15 * time.Minute)
+		t := time.Now().UTC().Add(15 * time.Minute)
 		expiresAtTime = &t
 	}
 
@@ -189,7 +194,7 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 	}
 
 	// Auto-expire order if 15-minute window has passed
-	if order.PaymentStatus == "PENDING" && order.ExpiresAt != nil && time.Now().After(*order.ExpiresAt) {
+	if order.PaymentStatus == "PENDING" && order.ExpiresAt != nil && time.Now().UTC().After(order.ExpiresAt.UTC()) {
 		_ = s.orderRepo.UpdatePaymentStatus(order.InvoiceNumber, "EXPIRED", nil)
 		order.PaymentStatus = "EXPIRED"
 	}

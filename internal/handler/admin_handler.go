@@ -70,7 +70,7 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Set persistent HTTP-only session cookie (30 days)
 	cookieVal := &http.Cookie{
-		Name:     "digihub_admin_session",
+		Name:     "digimest_admin_session",
 		Value:    token,
 		Path:     "/",
 		MaxAge:   86400 * 30, // 30 days
@@ -79,7 +79,10 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, cookieVal)
-	// Also set storeku_admin_session for backward compatibility
+	// Also set backward compatibility cookies
+	cookieDigihub := *cookieVal
+	cookieDigihub.Name = "digihub_admin_session"
+	http.SetCookie(w, &cookieDigihub)
 	cookieLegacy := *cookieVal
 	cookieLegacy.Name = "storeku_admin_session"
 	http.SetCookie(w, &cookieLegacy)
@@ -93,24 +96,17 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout handles POST /api/admin/logout
 func (h *AdminHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "digihub_admin_session",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     "storeku_admin_session",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	for _, cookieName := range []string{"digimest_admin_session", "digihub_admin_session", "storeku_admin_session"} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     cookieName,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0),
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -365,6 +361,7 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 		CustomDescription: req.CustomDescription,
 		CustomTerms:       req.CustomTerms,
 		IsActive:          req.IsActive,
+		IsForceOutOfStock: req.IsForceOutOfStock,
 		BaselineModalIDR:  modalIDR,
 		IsAutoSuspended:   false,
 	}

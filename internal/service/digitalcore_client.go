@@ -190,6 +190,12 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 				continue
 			}
 
+			// Force Out of Stock override: product still appears in catalog, but stock is 0 and flagged
+			if ov.IsForceOutOfStock {
+				p.IsForceOutOfStock = true
+				p.Stock = 0
+			}
+
 			if ov.CustomName != "" {
 				p.Name = ov.CustomName
 			}
@@ -342,6 +348,8 @@ func (c *DigitalCoreClient) FetchAdminProducts() ([]*models.AdminProductItem, er
 			CustomTerms:         "",
 			Terms:               "Membeli berarti setuju",
 			IsActive:            true,
+			IsForceOutOfStock:   false,
+			IsOriginalOutOfStock: (p.Stock <= 0),
 			IsCustomized:        false,
 			Tiers:               p.Tiers,
 		}
@@ -350,6 +358,7 @@ func (c *DigitalCoreClient) FetchAdminProducts() ([]*models.AdminProductItem, er
 
 		if ov, hasOv := overrides[p.Slug]; hasOv {
 			item.IsActive = ov.IsActive
+			item.IsForceOutOfStock = ov.IsForceOutOfStock
 			item.IsCustomized = true
 			item.CustomName = ov.CustomName
 			if ov.CustomName != "" {

@@ -1,0 +1,21 @@
+[Unit]
+Description=Digimest Backend Service (Go Daemon)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/digimest-backend
+ExecStart=/var/www/digimest-backend/storeku-linux
+Restart=always
+RestartSec=5
+EnvironmentFile=/var/www/digimest-backend/.env
+LimitNOFILE=65535
+
+# Standard Output & Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=digimest-backend
+
+[Install]
+WantedBy=multi-user.target

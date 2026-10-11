@@ -65,6 +65,7 @@ type Product struct {
 	DiscountPercent   int           `json:"discountPercent"`
 	Tiers             []ProductTier `json:"tiers"`
 	IsActive          bool          `json:"isActive"`
+	IsForceOutOfStock bool          `json:"isForceOutOfStock"`
 	IsCustomized      bool          `json:"isCustomized"`
 	BaselineModalIDR  int64         `json:"baselineModalIDR"`
 	IsAutoSuspended   bool          `json:"isAutoSuspended"`
@@ -80,6 +81,7 @@ type ProductOverride struct {
 	CustomDescription string    `json:"custom_description"`
 	CustomTerms       string    `json:"custom_terms"`
 	IsActive          bool      `json:"is_active"`
+	IsForceOutOfStock bool      `json:"is_force_out_of_stock"`
 	BaselineModalIDR  int64     `json:"baseline_modal_idr"`
 	IsAutoSuspended   bool      `json:"is_auto_suspended"`
 	CreatedAt         time.Time `json:"created_at"`
@@ -94,6 +96,7 @@ type ProductOverrideRequest struct {
 	CustomDescription string `json:"custom_description"`
 	CustomTerms       string `json:"custom_terms"`
 	IsActive          bool   `json:"is_active"`
+	IsForceOutOfStock bool   `json:"is_force_out_of_stock"`
 }
 
 // AdminProductItem provides rich details for the admin products management table
@@ -123,6 +126,8 @@ type AdminProductItem struct {
 	CustomTerms         string        `json:"custom_terms"`
 	Terms               string        `json:"terms"`
 	IsActive            bool          `json:"is_active"`
+	IsForceOutOfStock   bool          `json:"is_force_out_of_stock"`
+	IsOriginalOutOfStock bool         `json:"is_original_out_of_stock"`
 	IsCustomized        bool          `json:"is_customized"`
 	BaselineModalIDR    int64         `json:"baseline_modal_idr"`
 	IsAutoSuspended     bool          `json:"is_auto_suspended"`

@@ -26,9 +26,19 @@ func NewPublicHandler(cfg *config.Config, dcClient *service.DigitalCoreClient, o
 	}
 }
 
+// HealthCheck handles GET /health and GET /api/health
+func (h *PublicHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"status":  "healthy",
+		"service": "digimest-backend",
+		"version": "1.0.0",
+	})
+}
+
 // GetAppConfig handles GET /api/config
 func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
-	username := "Digihubsupport"
+	username := "Digimestsupport"
 	if h.cfg != nil && h.cfg.TelegramSupportUsername != "" {
 		username = h.cfg.TelegramSupportUsername
 	}

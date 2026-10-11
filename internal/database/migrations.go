@@ -52,6 +52,7 @@ func RunMigrations(db *sql.DB) error {
 			custom_description TEXT DEFAULT '',
 			custom_terms TEXT DEFAULT '',
 			is_active INTEGER NOT NULL DEFAULT 1,
+			is_force_out_of_stock INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
@@ -77,6 +78,7 @@ func RunMigrations(db *sql.DB) error {
 	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN promo_price_idr INTEGER DEFAULT 0;")
 	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN baseline_modal_idr INTEGER DEFAULT 0;")
 	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN is_auto_suspended INTEGER DEFAULT 0;")
+	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN is_force_out_of_stock INTEGER DEFAULT 0;")
 
 	return nil
 }
