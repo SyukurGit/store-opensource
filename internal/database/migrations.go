@@ -6,7 +6,7 @@ import (
 )
 
 func RunMigrations(db *sql.DB) error {
-	queries := []string{
+	tableQueries := []string{
 		`CREATE TABLE IF NOT EXISTS orders (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			invoice_number TEXT UNIQUE NOT NULL,
@@ -68,7 +68,32 @@ func RunMigrations(db *sql.DB) error {
 			failure_reason TEXT DEFAULT '',
 			login_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
+	}
 
+	for _, q := range tableQueries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("migration table query failed: %w (query: %s)", err, q)
+		}
+	}
+
+	// Safe column additions for existing sqlite database (run before creating indexes on new columns)
+	alterQueries := []string{
+		"ALTER TABLE orders ADD COLUMN customer_email TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN cost_at_checkout_usd REAL DEFAULT 0;",
+		"ALTER TABLE orders ADD COLUMN cost_at_fulfillment_usd REAL DEFAULT 0;",
+		"ALTER TABLE product_overrides ADD COLUMN promo_price_idr INTEGER DEFAULT 0;",
+		"ALTER TABLE product_overrides ADD COLUMN baseline_modal_idr INTEGER DEFAULT 0;",
+		"ALTER TABLE product_overrides ADD COLUMN is_auto_suspended INTEGER DEFAULT 0;",
+		"ALTER TABLE product_overrides ADD COLUMN is_force_out_of_stock INTEGER DEFAULT 0;",
+		"ALTER TABLE admin_login_logs ADD COLUMN status TEXT DEFAULT 'SUCCESS';",
+		"ALTER TABLE admin_login_logs ADD COLUMN failure_reason TEXT DEFAULT '';",
+	}
+	for _, alterQ := range alterQueries {
+		_, _ = db.Exec(alterQ)
+	}
+
+	// Create indexes AFTER tables and altered columns are guaranteed to exist
+	indexQueries := []string{
 		`CREATE INDEX IF NOT EXISTS idx_orders_invoice ON orders(invoice_number);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_claim ON orders(claim_code);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_gateway ON orders(gateway_order_id);`,
@@ -80,22 +105,12 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_admin_login_ip ON admin_login_logs(ip_address);`,
 	}
 
-	for _, q := range queries {
-		if _, err := db.Exec(q); err != nil {
-			return fmt.Errorf("migration query failed: %w (query: %s)", err, q)
+	for _, idxQ := range indexQueries {
+		if _, err := db.Exec(idxQ); err != nil {
+			return fmt.Errorf("migration index query failed: %w (query: %s)", err, idxQ)
 		}
 	}
 
-	// Safe column addition for existing sqlite database
-	_, _ = db.Exec("ALTER TABLE orders ADD COLUMN customer_email TEXT DEFAULT '';")
-	_, _ = db.Exec("ALTER TABLE orders ADD COLUMN cost_at_checkout_usd REAL DEFAULT 0;")
-	_, _ = db.Exec("ALTER TABLE orders ADD COLUMN cost_at_fulfillment_usd REAL DEFAULT 0;")
-	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN promo_price_idr INTEGER DEFAULT 0;")
-	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN baseline_modal_idr INTEGER DEFAULT 0;")
-	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN is_auto_suspended INTEGER DEFAULT 0;")
-	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN is_force_out_of_stock INTEGER DEFAULT 0;")
-	_, _ = db.Exec("ALTER TABLE admin_login_logs ADD COLUMN status TEXT DEFAULT 'SUCCESS';")
-	_, _ = db.Exec("ALTER TABLE admin_login_logs ADD COLUMN failure_reason TEXT DEFAULT '';")
-
 	return nil
 }
+
