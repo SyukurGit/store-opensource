@@ -23,12 +23,12 @@ func (r *OrderRepository) CreateOrder(o *models.Order) error {
 			invoice_number, claim_code, product_slug, product_name, product_type,
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
-			warranty_info, customer_contact, customer_email, expires_at, created_at, updated_at
+			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, expires_at, created_at, updated_at
 		) VALUES (
 			?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?,
-			?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+			?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 		)
 	`
 	res, err := r.db.Exec(
@@ -36,7 +36,7 @@ func (r *OrderRepository) CreateOrder(o *models.Order) error {
 		o.InvoiceNumber, o.ClaimCode, o.ProductSlug, o.ProductName, o.ProductType,
 		o.Quantity, o.BasePriceUSD, o.SellPriceIDR, o.OriginalAmount, o.UniqueCode,
 		o.TotalAmount, o.GatewayOrderID, o.QRURL, o.PaymentStatus, o.FulfillmentStatus,
-		o.WarrantyInfo, o.CustomerContact, o.CustomerEmail, o.ExpiresAt,
+		o.WarrantyInfo, o.CustomerContact, o.CustomerEmail, o.CostAtCheckoutUSD, o.ExpiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert order: %w", err)
@@ -56,7 +56,8 @@ func (r *OrderRepository) GetOrderByInvoice(invoice string) (*models.Order, erro
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
-			warranty_info, customer_contact, customer_email, paid_at, expires_at, created_at, updated_at
+			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
+			paid_at, expires_at, created_at, updated_at
 		FROM orders WHERE invoice_number = ?
 	`
 	row := r.db.QueryRow(query, invoice)
@@ -70,7 +71,8 @@ func (r *OrderRepository) GetOrderByClaimCode(claimCode string) (*models.Order, 
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
-			warranty_info, customer_contact, customer_email, paid_at, expires_at, created_at, updated_at
+			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
+			paid_at, expires_at, created_at, updated_at
 		FROM orders WHERE claim_code = ?
 	`
 	row := r.db.QueryRow(query, claimCode)
@@ -84,7 +86,8 @@ func (r *OrderRepository) GetOrderByGatewayOrderID(gwID string) (*models.Order, 
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
-			warranty_info, customer_contact, customer_email, paid_at, expires_at, created_at, updated_at
+			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
+			paid_at, expires_at, created_at, updated_at
 		FROM orders WHERE gateway_order_id = ?
 	`
 	row := r.db.QueryRow(query, gwID)
@@ -112,14 +115,34 @@ func (r *OrderRepository) UpdateGatewayDetails(invoice, gwID, qrURL string, uniq
 }
 
 func (r *OrderRepository) UpdateFulfillment(invoice, status, errStr, dcOrderID, dcViewURL, deliveredJSON string) error {
+	return r.UpdateFulfillmentWithCost(invoice, status, errStr, dcOrderID, dcViewURL, deliveredJSON, 0)
+}
+
+func (r *OrderRepository) UpdateFulfillmentWithCost(invoice, status, errStr, dcOrderID, dcViewURL, deliveredJSON string, costUSD float64) error {
 	query := `
 		UPDATE orders
 		SET fulfillment_status = ?, fulfillment_error = ?, digitalcore_order_id = ?,
-		    digitalcore_view_url = ?, delivered_items = ?, updated_at = CURRENT_TIMESTAMP
+		    digitalcore_view_url = ?, delivered_items = ?, cost_at_fulfillment_usd = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE invoice_number = ?
 	`
-	_, err := r.db.Exec(query, status, errStr, dcOrderID, dcViewURL, deliveredJSON, invoice)
+	_, err := r.db.Exec(query, status, errStr, dcOrderID, dcViewURL, deliveredJSON, costUSD, invoice)
 	return err
+}
+
+func (r *OrderRepository) SweepExpiredOrders() (int64, error) {
+	now := time.Now()
+	query := `
+		UPDATE orders
+		SET payment_status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP
+		WHERE payment_status = 'PENDING'
+		  AND expires_at IS NOT NULL
+		  AND expires_at < ?
+	`
+	res, err := r.db.Exec(query, now)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func (r *OrderRepository) ListOrders(limit, offset int, statusFilter string) ([]*models.Order, int64, error) {
@@ -130,7 +153,8 @@ func (r *OrderRepository) ListOrders(limit, offset int, statusFilter string) ([]
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
-			warranty_info, customer_contact, customer_email, paid_at, expires_at, created_at, updated_at
+			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
+			paid_at, expires_at, created_at, updated_at
 		FROM orders
 	`
 
@@ -206,7 +230,8 @@ func scanOrder(row *sql.Row) (*models.Order, error) {
 		&o.Quantity, &o.BasePriceUSD, &o.SellPriceIDR, &o.OriginalAmount, &o.UniqueCode,
 		&o.TotalAmount, &o.GatewayOrderID, &o.QRURL, &o.PaymentStatus, &o.FulfillmentStatus,
 		&o.FulfillmentError, &o.DigitalCoreOrderID, &o.DigitalCoreViewURL, &o.DeliveredItems,
-		&o.WarrantyInfo, &o.CustomerContact, &o.CustomerEmail, &o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
+		&o.WarrantyInfo, &o.CustomerContact, &o.CustomerEmail, &o.CostAtCheckoutUSD, &o.CostAtFulfillmentUSD,
+		&o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -221,7 +246,8 @@ func scanOrderRows(rows *sql.Rows) (*models.Order, error) {
 		&o.Quantity, &o.BasePriceUSD, &o.SellPriceIDR, &o.OriginalAmount, &o.UniqueCode,
 		&o.TotalAmount, &o.GatewayOrderID, &o.QRURL, &o.PaymentStatus, &o.FulfillmentStatus,
 		&o.FulfillmentError, &o.DigitalCoreOrderID, &o.DigitalCoreViewURL, &o.DeliveredItems,
-		&o.WarrantyInfo, &o.CustomerContact, &o.CustomerEmail, &o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
+		&o.WarrantyInfo, &o.CustomerContact, &o.CustomerEmail, &o.CostAtCheckoutUSD, &o.CostAtFulfillmentUSD,
+		&o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

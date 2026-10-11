@@ -77,7 +77,18 @@ async function loadStats() {
     const s = json.data;
     statRev.textContent = formatIDR(s.total_revenue_idr);
     document.getElementById('statPaidCount').textContent = s.paid_orders;
-    document.getElementById('statDcBalance').textContent = `$${(s.digitalcore_balance || 0).toFixed(2)}`;
+
+    const dcBalEl = document.getElementById('statDcBalance');
+    if (dcBalEl) {
+      dcBalEl.textContent = `$${(s.digitalcore_balance || 0).toFixed(2)}`;
+      if (s.digitalcore_balance < 5.0) {
+        dcBalEl.style.color = '#f87171';
+        dcBalEl.title = '⚠️ Peringatan: Saldo bot menipis (< $5.00), segera lakukan top-up!';
+      } else {
+        dcBalEl.style.color = '#10b981';
+      }
+    }
+
     document.getElementById('statDcOrders').textContent = s.digitalcore_orders || '0';
     document.getElementById('statTodayRevenue').textContent = formatIDR(s.today_revenue_idr);
     document.getElementById('statTodayOrders').textContent = s.today_orders;
@@ -380,13 +391,15 @@ function applyOrderFilter() {
   const search = (document.getElementById('searchOrderInput')?.value || '').trim().toLowerCase();
 
   filteredAdminOrders = allAdminOrders.filter(o => {
-    if (currentOrderFilter === 'HOLD' && o.fulfillment_status !== 'HOLD_PRICE_SPIKE') {
+    if (currentOrderFilter === 'HOLD' && o.fulfillment_status !== 'HOLD_PRICE_SPIKE' && o.fulfillment_status !== 'HOLD_INSUFFICIENT_BOT_BALANCE') {
       return false;
     }
     const match = (o.invoice_number || '').toLowerCase().includes(search) ||
                   (o.customer_email || '').toLowerCase().includes(search) ||
                   (o.customer_contact || '').toLowerCase().includes(search) ||
                   (o.claim_code || '').toLowerCase().includes(search) ||
+                  (o.gateway_order_id || '').toLowerCase().includes(search) ||
+                  (o.digitalcore_order_id || '').toLowerCase().includes(search) ||
                   (o.product_name || '').toLowerCase().includes(search);
     return match;
   });
@@ -422,13 +435,17 @@ function renderOrdersTable() {
     } else if (o.fulfillment_status === 'HOLD_PRICE_SPIKE') {
       fulfillLabel = '⚠️ Ditahan (Harga)';
       customFulfillStyle = 'background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4);';
+    } else if (o.fulfillment_status === 'HOLD_INSUFFICIENT_BOT_BALANCE') {
+      fulfillLabel = '⚠️ Saldo Bot Kurang';
+      customFulfillStyle = 'background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4);';
     } else if (o.fulfillment_status === 'REFUNDED') {
       fulfillLabel = '💸 Refunded';
       customFulfillStyle = 'background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3);';
     }
 
     const isFulfillFailed = o.payment_status === 'PAID' && o.fulfillment_status === 'FAILED';
-    const isHoldSpike = o.fulfillment_status === 'HOLD_PRICE_SPIKE';
+    const isHold = o.fulfillment_status === 'HOLD_PRICE_SPIKE' || o.fulfillment_status === 'HOLD_INSUFFICIENT_BOT_BALANCE';
+    const isPending = o.payment_status === 'PENDING';
 
     if (isDashboard) {
       return `
@@ -456,8 +473,9 @@ function renderOrdersTable() {
           <td>
             <div style="display: flex; gap: 4px; flex-wrap: wrap;">
               <button class="btn-action-mini" onclick="viewOrderDetail('${escapeHtml(o.invoice_number)}')">Detail</button>
+              ${isPending ? `<button class="btn-action-mini" style="background: rgba(16,185,129,0.18); color: #34d399; border: 1px solid rgba(16,185,129,0.4);" onclick="manualPaidAndFulfill('${escapeHtml(o.invoice_number)}')" title="Terima Transfer Manual & Kirim Lisensi">Bayar Manual</button>` : ''}
               ${isFulfillFailed ? `<button class="btn-retry" onclick="retryFulfillment('${escapeHtml(o.invoice_number)}')">Retry</button>` : ''}
-              ${isHoldSpike ? `
+              ${isHold ? `
                 <button class="btn-action-mini" style="background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4);" onclick="forceFulfillOrder('${escapeHtml(o.invoice_number)}')">Beli</button>
                 <button class="btn-action-mini" style="background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4);" onclick="markRefundedOrder('${escapeHtml(o.invoice_number)}')">Refund</button>
               ` : ''}
@@ -500,8 +518,9 @@ function renderOrdersTable() {
         <td style="text-align: right;">
           <div style="display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap;">
             <button class="btn-action-mini" onclick="viewOrderDetail('${escapeHtml(o.invoice_number)}')">Detail</button>
+            ${isPending ? `<button class="btn-action-mini" style="background: rgba(16,185,129,0.18); color: #34d399; border: 1px solid rgba(16,185,129,0.4);" onclick="manualPaidAndFulfill('${escapeHtml(o.invoice_number)}')" title="Terima Transfer Manual & Kirim Lisensi">Bayar Manual</button>` : ''}
             ${isFulfillFailed ? `<button class="btn-retry" onclick="retryFulfillment('${escapeHtml(o.invoice_number)}')">Retry Beli</button>` : ''}
-            ${isHoldSpike ? `
+            ${isHold ? `
               <button class="btn-action-mini" style="background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4);" onclick="forceFulfillOrder('${escapeHtml(o.invoice_number)}')">Beli Paksa</button>
               <button class="btn-action-mini" style="background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4);" onclick="markRefundedOrder('${escapeHtml(o.invoice_number)}')">Refund</button>
             ` : ''}
@@ -593,6 +612,27 @@ async function forceFulfillOrder(invoice) {
     const json = await res.json();
     if (json.success) {
       showToast('Pesanan berhasil dibeli dan dipenuhi! 🎉');
+      await loadOrders();
+      await loadStats();
+    } else {
+      alert('Gagal: ' + (json.error || 'Server error'));
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function manualPaidAndFulfill(invoice) {
+  if (!confirm(`Konfirmasi pembayaran manual untuk ${invoice}?\n\nPesanan akan ditandai LUNAS dan sistem langsung membelikan lisensi ke DigitalCore.`)) return;
+
+  try {
+    const res = await adminFetch(`/api/admin/orders/${encodeURIComponent(invoice)}/manual-paid-fulfill`, {
+      method: 'POST'
+    });
+    if (!res) return;
+    const json = await res.json();
+    if (json.success) {
+      showToast('Pesanan lunas & lisensi berhasil dibeli! 🎉');
       await loadOrders();
       await loadStats();
     } else {

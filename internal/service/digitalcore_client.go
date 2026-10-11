@@ -138,6 +138,7 @@ func (c *DigitalCoreClient) FetchRawProducts() ([]*models.Product, error) {
 		modalIDR := int64(math.Round(baseUSD * c.pricing.GetUSDRate()))
 
 		products = append(products, &models.Product{
+			RawID:             p.ID,
 			Slug:              slug,
 			Name:              p.Name,
 			Type:              p.Type,
@@ -237,8 +238,8 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 					promoCandidate = minSafePrice
 				}
 
-				// If promo price equals or exceeds reference price, banner promo turns off!
-				if promoCandidate >= refPrice {
+				// If promo price equals or exceeds reference price or original base price during surge, banner promo turns off!
+				if promoCandidate >= refPrice || (ov.CustomPriceIDR > 0 && deltaModal > 0 && promoCandidate >= ov.CustomPriceIDR) {
 					p.PromoPriceIDR = 0
 					p.PriceIDR = refPrice
 					p.HasPromo = false
@@ -398,7 +399,7 @@ func (c *DigitalCoreClient) FetchAdminProducts() ([]*models.AdminProductItem, er
 					promoCandidate = minSafePrice
 				}
 
-				if promoCandidate >= refPrice {
+				if promoCandidate >= refPrice || (ov.CustomPriceIDR > 0 && deltaModal > 0 && promoCandidate >= ov.CustomPriceIDR) {
 					item.PromoPriceIDR = 0
 					item.PriceIDR = refPrice
 					item.HasPromo = false
@@ -494,9 +495,20 @@ func (c *DigitalCoreClient) BuyProduct(slugOrID string, count int) (*DigitalCore
 		return nil, fmt.Errorf("DIGITALCORE_API_KEY is not configured")
 	}
 
+	targetID := interface{}(slugOrID)
+	// If slugOrID matches a product slug, resolve to upstream raw ID if available
+	if rawProds, err := c.FetchRawProducts(); err == nil {
+		for _, p := range rawProds {
+			if (p.Slug == slugOrID || strings.EqualFold(p.Name, slugOrID)) && p.RawID != nil {
+				targetID = p.RawID
+				break
+			}
+		}
+	}
+
 	url := fmt.Sprintf("%s/api/user/buy", strings.TrimRight(c.cfg.DigitalCoreBaseURL, "/"))
 	payload := map[string]interface{}{
-		"id":    slugOrID,
+		"id":    targetID,
 		"count": count,
 	}
 

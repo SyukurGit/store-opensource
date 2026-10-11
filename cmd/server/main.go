@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -43,8 +44,19 @@ func main() {
 
 	// 5. Initialize Handlers
 	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService)
-	webhookHandler := handler.NewWebhookHandler(orderService)
+	webhookHandler := handler.NewWebhookHandler(orderService, pgClient, orderRepo)
 	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, dcClient, orderService)
+
+	// Background Sweeper: auto-expire orders that passed their 15-minute deadline
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if count, err := orderRepo.SweepExpiredOrders(); err == nil && count > 0 {
+				log.Printf("[SWEEPER] Auto-expired %d unpaid orders past deadline.", count)
+			}
+		}
+	}()
 
 	// 6. Router Setup
 	r := chi.NewRouter()
@@ -83,6 +95,7 @@ func main() {
 			r.Get("/admin/orders", adminHandler.ListOrders)
 			r.Post("/admin/retry", adminHandler.RetryFulfillment)
 			r.Post("/admin/orders/{invoice}/force-fulfill", adminHandler.ForceFulfill)
+			r.Post("/admin/orders/{invoice}/manual-paid-fulfill", adminHandler.ManualPaidAndFulfill)
 			r.Post("/admin/orders/{invoice}/mark-refunded", adminHandler.MarkRefunded)
 			r.Get("/admin/settings", adminHandler.GetSettings)
 			r.Post("/admin/settings", adminHandler.SaveSettings)

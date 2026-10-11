@@ -31,6 +31,8 @@ func RunMigrations(db *sql.DB) error {
 			warranty_info TEXT DEFAULT '',
 			customer_contact TEXT DEFAULT '',
 			customer_email TEXT DEFAULT '',
+			cost_at_checkout_usd REAL DEFAULT 0,
+			cost_at_fulfillment_usd REAL DEFAULT 0,
 			paid_at DATETIME,
 			expires_at DATETIME,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -241,8 +241,17 @@ func (h *AdminHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	validKeys := map[string]bool{
+		"usd_rate":                  true,
+		"margin_percent":            true,
+		"margin_fixed":              true,
+		"max_surge_disable_percent": true,
+	}
+
 	for k, v := range body {
-		_ = h.settingRepo.Set(k, v)
+		if validKeys[k] {
+			_ = h.settingRepo.Set(k, v)
+		}
 	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
@@ -446,6 +455,31 @@ func (h *AdminHandler) MarkRefunded(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Pesanan berhasil ditandai sebagai telah di-refund",
+	})
+}
+
+// ManualPaidAndFulfill handles POST /api/admin/orders/{invoice}/manual-paid-fulfill
+func (h *AdminHandler) ManualPaidAndFulfill(w http.ResponseWriter, r *http.Request) {
+	invoice := chi.URLParam(r, "invoice")
+	if invoice == "" {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Nomor invoice wajib disertakan",
+		})
+		return
+	}
+
+	if err := h.orderService.ManualMarkPaidAndFulfill(invoice); err != nil {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Pesanan berhasil ditandai Lunas dan fulfillment berhasil diproses!",
 	})
 }
 

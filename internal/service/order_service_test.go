@@ -189,3 +189,81 @@ func TestPriceSpikeAutoHoldAndRefund(t *testing.T) {
 	}
 }
 
+func TestSweepExpiredOrders(t *testing.T) {
+	_, repo := setupTestOrderService(t)
+
+	past := time.Now().Add(-30 * time.Minute)
+	future := time.Now().Add(10 * time.Minute)
+
+	// Create 1 expired and 1 active pending order
+	_ = repo.CreateOrder(&models.Order{
+		InvoiceNumber:     "INV-SWEEP-001",
+		ClaimCode:         "CLM-SWEEP-001",
+		ProductSlug:       "p1",
+		ProductName:       "Prod 1",
+		Quantity:          1,
+		TotalAmount:       10000,
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &past,
+	})
+	_ = repo.CreateOrder(&models.Order{
+		InvoiceNumber:     "INV-SWEEP-002",
+		ClaimCode:         "CLM-SWEEP-002",
+		ProductSlug:       "p2",
+		ProductName:       "Prod 2",
+		Quantity:          1,
+		TotalAmount:       20000,
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &future,
+	})
+
+	affected, err := repo.SweepExpiredOrders()
+	if err != nil {
+		t.Fatalf("SweepExpiredOrders failed: %v", err)
+	}
+	if affected != 1 {
+		t.Fatalf("expected 1 expired order swept, got %d", affected)
+	}
+
+	o1, _ := repo.GetOrderByInvoice("INV-SWEEP-001")
+	if o1.PaymentStatus != "EXPIRED" {
+		t.Fatalf("expected INV-SWEEP-001 to be EXPIRED, got %s", o1.PaymentStatus)
+	}
+
+	o2, _ := repo.GetOrderByInvoice("INV-SWEEP-002")
+	if o2.PaymentStatus != "PENDING" {
+		t.Fatalf("expected INV-SWEEP-002 to remain PENDING, got %s", o2.PaymentStatus)
+	}
+}
+
+func TestManualMarkPaidAndFulfill(t *testing.T) {
+	svc, repo := setupTestOrderService(t)
+
+	exp := time.Now().Add(15 * time.Minute)
+	_ = repo.CreateOrder(&models.Order{
+		InvoiceNumber:     "INV-MANUAL-001",
+		ClaimCode:         "CLM-MANUAL-001",
+		ProductSlug:       "p-manual",
+		ProductName:       "Manual Product",
+		Quantity:          1,
+		TotalAmount:       50000,
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	})
+
+	// Marking paid manually should update payment status to PAID
+	_ = svc.ManualMarkPaidAndFulfill("INV-MANUAL-001")
+
+	o, err := repo.GetOrderByInvoice("INV-MANUAL-001")
+	if err != nil {
+		t.Fatalf("failed to get order: %v", err)
+	}
+	if o.PaymentStatus != "PAID" {
+		t.Fatalf("expected payment_status PAID, got %s", o.PaymentStatus)
+	}
+}
+
+

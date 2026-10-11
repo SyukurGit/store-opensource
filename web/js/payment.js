@@ -185,21 +185,27 @@ function showSuccessView(order) {
   const itemsContainer = document.getElementById('itemsContainer');
   const copyAllBtn = document.getElementById('copyAllKeysBtn');
 
-  if (order.is_quota_out || order.fulfillment_status === 'HOLD_PRICE_SPIKE') {
+  if (order.is_quota_out || order.fulfillment_status === 'HOLD_PRICE_SPIKE' || order.fulfillment_status === 'HOLD_INSUFFICIENT_BOT_BALANCE' || order.fulfillment_status === 'FAILED') {
     if (copyAllBtn) copyAllBtn.style.display = 'none';
+    const isFailed = order.fulfillment_status === 'FAILED' || order.fulfillment_status === 'HOLD_INSUFFICIENT_BOT_BALANCE';
+    const title = isFailed ? 'Kendala Pemenuhan Stok Upstream' : 'Kuota Produk Habis Terjual';
+    const defaultMsg = isFailed
+      ? "Pembayaran Anda terverifikasi, namun terjadi kendala pemenuhan otomatis dari penyedia server (stok mendadak kosong/saldo bot). Dana Anda aman 100%! Silakan klik tombol di bawah untuk chat CS Telegram kami."
+      : "Mohon maaf, kuota produk saat ini telah habis terjual. Dana pembayaran Anda aman 100%. Untuk proses pengembalian dana (refund), silakan hubungi Customer Service kami via Telegram.";
+
     itemsContainer.innerHTML = `
       <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 20px; text-align: center;">
         <div style="font-size: 1.8rem; margin-bottom: 8px;">⚠️</div>
-        <div style="font-weight: 700; color: #fbbf24; font-size: 1.05rem; margin-bottom: 8px;">Kuota Produk Habis Terjual</div>
+        <div style="font-weight: 700; color: #fbbf24; font-size: 1.05rem; margin-bottom: 8px;">${title}</div>
         <p style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
-          ${escapeHtml(order.quota_out_message || "Mohon maaf, kuota produk saat ini telah habis terjual. Dana pembayaran Anda aman 100%. Untuk proses pengembalian dana (refund), silakan hubungi Customer Service kami via Telegram.")}
+          ${escapeHtml(order.quota_out_message || defaultMsg)}
         </p>
         <a href="https://t.me/Digihubsupport" target="_blank" rel="noopener" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; padding: 10px 20px;" data-tele-cs>
           <span>Hubungi CS via Telegram</span> ➔
         </a>
       </div>
     `;
-    showToast('Pembayaran Diterima (Kuota Habis)');
+    showToast(isFailed ? 'Kendala Stok Upstream' : 'Pembayaran Diterima (Kuota Habis)');
     return;
   }
 
@@ -335,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadPaymentDetails();
 
   document.getElementById('btnManualCheck')?.addEventListener('click', triggerManualCheck);
+  document.getElementById('btnCheckExpiredLate')?.addEventListener('click', triggerManualCheck);
   document.getElementById('copyAllKeysBtn')?.addEventListener('click', copyAllKeys);
 
   // Cancel order modal handlers

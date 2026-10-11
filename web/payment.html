@@ -127,8 +127,13 @@
       <div id="expiredView" style="display: none;">
         <div style="font-size: 3rem; margin-bottom: 0.5rem;">⌛</div>
         <h2 style="font-size: 1.35rem; font-weight: 800; color: #f87171; margin-bottom: 0.5rem;">Tagihan QRIS Kedaluwarsa</h2>
-        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.5rem;">Batas waktu 15 menit telah habis. Jika Anda belum transfer, silakan buat pesanan baru.</p>
-        <a href="/" class="btn-submit" style="text-decoration: none; display: block;">Buat Pesanan Baru</a>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.5rem;">Batas waktu 15 menit telah habis. Jika Anda baru saja transfer atau mengalami keterlambatan mutasi, periksa status pesanan Anda.</p>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <button type="button" id="btnCheckExpiredLate" class="btn-submit" style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #34d399; cursor: pointer;">
+            ⚡ Saya Sudah Transfer (Cek Ulang Status)
+          </button>
+          <a href="/" class="btn-nav" style="text-decoration: none; text-align: center; display: block; padding: 10px;">Buat Pesanan Baru</a>
+        </div>
       </div>
 
       <!-- Cancelled View -->

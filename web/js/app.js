@@ -144,7 +144,7 @@ function openCheckoutModal(slug) {
   qtyInput.max = selectedProduct.stock > 0 ? selectedProduct.stock : 100;
 
   // Prefill email if previously used
-  const savedEmail = localStorage.getItem('storeku_saved_email') || '';
+  const savedEmail = localStorage.getItem('digihub_saved_email') || localStorage.getItem('storeku_saved_email') || '';
   const emailInput = document.getElementById('emailInput');
   if (emailInput && !emailInput.value) {
     emailInput.value = savedEmail;

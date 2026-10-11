@@ -21,7 +21,7 @@ type OrderService struct {
 	dcClient      *DigitalCoreClient
 	pgClient      *PaymentGClient
 	resendService *ResendService
-	fulfillLock   sync.Mutex
+	locks         sync.Map // invoice string -> *sync.Mutex
 }
 
 func NewOrderService(
@@ -38,6 +38,11 @@ func NewOrderService(
 		pgClient:      pgClient,
 		resendService: resendService,
 	}
+}
+
+func (s *OrderService) getInvoiceLock(invoice string) *sync.Mutex {
+	l, _ := s.locks.LoadOrStore(invoice, &sync.Mutex{})
+	return l.(*sync.Mutex)
 }
 
 func generateRandomString(n int) string {
@@ -153,6 +158,7 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		WarrantyInfo:      targetProduct.Warranty,
 		CustomerContact:   req.CustomerContact,
 		CustomerEmail:     req.CustomerEmail,
+		CostAtCheckoutUSD: unitPriceUSD,
 		ExpiresAt:         expiresAtTime,
 	}
 
@@ -220,6 +226,10 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 		res.IsQuotaOut = true
 		res.QuotaOutMessage = "Mohon maaf, kuota/stok produk saat ini telah habis terjual. Dana pembayaran Anda aman, untuk proses pengembalian dana (refund) 100% silakan hubungi CS via Telegram."
 		res.DeliveredItems = []string{}
+	} else if order.FulfillmentStatus == "HOLD_INSUFFICIENT_BOT_BALANCE" || order.FulfillmentStatus == "FAILED" {
+		res.IsQuotaOut = true
+		res.QuotaOutMessage = "Mohon maaf, terjadi kendala antrean pemenuhan stok otomatis dari penyedia server. Dana pembayaran Anda aman 100%. Silakan hubungi Customer Service via Telegram untuk penanganan kilat atau refund."
+		res.DeliveredItems = []string{}
 	}
 
 	return res, nil
@@ -276,8 +286,9 @@ func (s *OrderService) TriggerInstantCheck(invoice string) error {
 
 // ProcessPaymentSuccess handles payment completion and initiates instant fulfillment
 func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error {
-	s.fulfillLock.Lock()
-	defer s.fulfillLock.Unlock()
+	lock := s.getInvoiceLock(invoice)
+	lock.Lock()
+	defer lock.Unlock()
 
 	order, err := s.orderRepo.GetOrderByInvoice(invoice)
 	if err != nil {
@@ -310,14 +321,29 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 	liveCostUSD, err := s.dcClient.GetProductLiveCost(order.ProductSlug, order.Quantity)
 	if err == nil && liveCostUSD > 0 {
 		rate := s.pricing.GetUSDRate()
+		minMarginPct := s.pricing.GetMarginPercent()
 		liveTotalCostIDR := int64(math.Ceil(liveCostUSD * rate * float64(order.Quantity)))
 
-		// If new wholesale cost exceeds what buyer paid: HALT! Protect bot balance!
-		if liveTotalCostIDR > order.TotalAmount {
-			errMsg := fmt.Sprintf("Lonjakan harga API upstream: modal naik menjadi Rp %d melebihi uang bayar pembeli Rp %d. Pembelian otomatis ditahan demi keamanan saldo bot.", liveTotalCostIDR, order.TotalAmount)
+		// 1. Minimum Revenue requirement: ensure default profit margin (e.g. 25%)
+		minSafeRevenueIDR := int64(math.Ceil(float64(liveTotalCostIDR) * (1.0 + (minMarginPct / 100.0))))
+
+		// If new wholesale cost exceeds what buyer paid OR dips below safe margin: HALT! Protect bot balance & profit!
+		if liveTotalCostIDR > order.TotalAmount || order.TotalAmount < minSafeRevenueIDR {
+			errMsg := fmt.Sprintf("Lonjakan harga API upstream: modal naik menjadi Rp %d (keuntungan aman minimal Rp %d, uang bayar Rp %d). Pembelian otomatis ditahan demi perlindungan saldo bot.", liveTotalCostIDR, minSafeRevenueIDR, order.TotalAmount)
 			log.Printf("[AUTO-HOLD PRICE SPIKE] %s: %s", invoice, errMsg)
 			_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_PRICE_SPIKE", errMsg, "", "", "[]")
-			return nil // SALDO BOT AMAN!
+			return nil // SALDO BOT & KEUNTUNGAN AMAN!
+		}
+
+		// 2. Pre-check Telegram bot balance before buying
+		reqUSD := liveCostUSD * float64(order.Quantity)
+		if me, err := s.dcClient.GetUserAccount(); err == nil && me != nil {
+			if me.Balance < reqUSD {
+				errMsg := fmt.Sprintf("Saldo bot DigitalCore ($%.2f) tidak mencukupi untuk pesanan ini ($%.2f). Pembelian otomatis ditahan untuk top-up saldo bot.", me.Balance, reqUSD)
+				log.Printf("[HOLD INSUFFICIENT BOT BALANCE] %s: %s", invoice, errMsg)
+				_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_INSUFFICIENT_BOT_BALANCE", errMsg, "", "", "[]")
+				return nil
+			}
 		}
 	}
 
@@ -331,7 +357,7 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 	}
 
 	itemsJSON, _ := json.Marshal(buyResp.Items)
-	if err := s.orderRepo.UpdateFulfillment(invoice, "SUCCESS", "", buyResp.OrderID, buyResp.ViewURL, string(itemsJSON)); err != nil {
+	if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", buyResp.OrderID, buyResp.ViewURL, string(itemsJSON), liveCostUSD); err != nil {
 		log.Printf("Error updating fulfillment record for %s: %v", invoice, err)
 	}
 
@@ -346,8 +372,9 @@ func (s *OrderService) RetryFulfillment(invoice string) error {
 
 // ForceFulfillOrder allows admin to consciously fulfill an order even if held
 func (s *OrderService) ForceFulfillOrder(invoice string) error {
-	s.fulfillLock.Lock()
-	defer s.fulfillLock.Unlock()
+	lock := s.getInvoiceLock(invoice)
+	lock.Lock()
+	defer lock.Unlock()
 
 	order, err := s.orderRepo.GetOrderByInvoice(invoice)
 	if err != nil {
@@ -370,11 +397,29 @@ func (s *OrderService) ForceFulfillOrder(invoice string) error {
 	}
 
 	itemsJSON, _ := json.Marshal(buyResp.Items)
-	if err := s.orderRepo.UpdateFulfillment(invoice, "SUCCESS", "", buyResp.OrderID, buyResp.ViewURL, string(itemsJSON)); err != nil {
+	if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", buyResp.OrderID, buyResp.ViewURL, string(itemsJSON), 0); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// ManualMarkPaidAndFulfill allows admin to confirm manual transfer without unique code and instantly fulfill
+func (s *OrderService) ManualMarkPaidAndFulfill(invoice string) error {
+	order, err := s.orderRepo.GetOrderByInvoice(invoice)
+	if err != nil {
+		return fmt.Errorf("pesanan '%s' tidak ditemukan", invoice)
+	}
+	if order.FulfillmentStatus == "SUCCESS" {
+		return fmt.Errorf("pesanan sudah berhasil dipenuhi sebelumnya")
+	}
+
+	now := time.Now()
+	if err := s.orderRepo.UpdatePaymentStatus(invoice, "PAID", &now); err != nil {
+		return fmt.Errorf("gagal mengupdate status pesanan menjadi PAID: %w", err)
+	}
+
+	return s.ProcessPaymentSuccess(invoice, "MANUAL_ADMIN_CONFIRMATION")
 }
 
 // MarkRefundedOrder marks an order fulfillment status as REFUNDED
@@ -427,6 +472,10 @@ func (s *OrderService) ClaimProduct(query string) (*models.ClaimResponse, error)
 	if order.FulfillmentStatus == "HOLD_PRICE_SPIKE" {
 		isQuotaOut = true
 		quotaOutMsg = "Mohon maaf, kuota/stok produk saat ini telah habis terjual. Dana pembayaran Anda aman, untuk proses pengembalian dana (refund) 100% silakan hubungi CS via Telegram."
+		items = []string{}
+	} else if order.FulfillmentStatus == "HOLD_INSUFFICIENT_BOT_BALANCE" || order.FulfillmentStatus == "FAILED" {
+		isQuotaOut = true
+		quotaOutMsg = "Mohon maaf, terjadi kendala antrean pemenuhan stok otomatis dari penyedia server. Dana pembayaran Anda aman 100%. Silakan hubungi CS kami via Telegram untuk penanganan prioritas atau refund."
 		items = []string{}
 	}
 

@@ -142,7 +142,18 @@ function renderProductDetail(p) {
 
 function getEffectiveUnitPrice(qty) {
   if (!currentProduct) return 0;
-  return currentProduct.priceIDR;
+  let price = currentProduct.priceIDR;
+  if (currentProduct.tiers && currentProduct.tiers.length > 0) {
+    for (const tier of currentProduct.tiers) {
+      if (qty >= tier.minQty && (tier.maxQty === null || tier.maxQty === undefined || qty <= tier.maxQty)) {
+        if (tier.priceIDR && tier.priceIDR > 0) {
+          price = tier.priceIDR;
+        }
+        break;
+      }
+    }
+  }
+  return price;
 }
 
 function updateCalculations() {

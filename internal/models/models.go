@@ -27,6 +27,8 @@ type Order struct {
 	WarrantyInfo        string     `json:"warranty_info"`
 	CustomerContact     string     `json:"customer_contact"`
 	CustomerEmail       string     `json:"customer_email"`
+	CostAtCheckoutUSD   float64    `json:"cost_at_checkout_usd"`
+	CostAtFulfillmentUSD float64   `json:"cost_at_fulfillment_usd"`
 	PaidAt              *time.Time `json:"paid_at"`
 	ExpiresAt           *time.Time `json:"expires_at"`
 	CreatedAt           time.Time  `json:"created_at"`
@@ -43,6 +45,7 @@ type ProductTier struct {
 
 // Product represents a catalog product presented to the frontend
 type Product struct {
+	RawID             interface{}   `json:"rawId,omitempty"`
 	Slug              string        `json:"slug"`
 	Name              string        `json:"name"`
 	Type              string        `json:"type"`
