@@ -57,12 +57,23 @@ func RunMigrations(db *sql.DB) error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
 
+		`CREATE TABLE IF NOT EXISTS admin_login_logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT NOT NULL,
+			ip_address TEXT NOT NULL,
+			user_agent TEXT NOT NULL,
+			location TEXT DEFAULT '',
+			device_info TEXT DEFAULT '',
+			login_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);`,
+
 		`CREATE INDEX IF NOT EXISTS idx_orders_invoice ON orders(invoice_number);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_claim ON orders(claim_code);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_gateway ON orders(gateway_order_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_product_overrides_active ON product_overrides(is_active);`,
+		`CREATE INDEX IF NOT EXISTS idx_admin_login_at ON admin_login_logs(login_at);`,
 	}
 
 	for _, q := range queries {

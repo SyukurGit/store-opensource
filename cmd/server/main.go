@@ -34,6 +34,7 @@ func main() {
 	settingRepo := repository.NewSettingRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
 	overrideRepo := repository.NewProductOverrideRepository(db)
+	adminLoginRepo := repository.NewAdminLoginRepository(db)
 
 	// 4. Initialize Services
 	pricingService := service.NewPricingService(cfg, settingRepo)
@@ -45,7 +46,7 @@ func main() {
 	// 5. Initialize Handlers
 	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService, settingRepo)
 	webhookHandler := handler.NewWebhookHandler(orderService, pgClient, orderRepo)
-	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, dcClient, orderService)
+	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, adminLoginRepo, dcClient, orderService)
 
 	// Background Sweeper: auto-expire orders that passed their 15-minute deadline
 	go func() {
@@ -93,6 +94,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(handler.AdminAuthMiddleware(cfg))
 			r.Get("/admin/stats", adminHandler.GetStats)
+			r.Get("/admin/last-login", adminHandler.GetLastLogin)
 			r.Get("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
 			r.Post("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
 			r.Get("/admin/products", adminHandler.ListProducts)

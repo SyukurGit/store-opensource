@@ -166,8 +166,9 @@ Menyimpan konfigurasi key-value:
 * `GET /api/admin/orders` — Riwayat seluruh pesanan dengan filter status dan pagination.
 * `POST /api/admin/retry` — Mencoba ulang auto-buy ke DigitalCore jika saldo bot sempat kosong.
 * `POST /api/admin/orders/{invoice}/force-fulfill` — Membeli paksa ke DigitalCore.
-* `POST /api/admin/orders/{invoice}/manual-paid-fulfill` — Konfirmasi bayar manual dan auto-buy.
+* `POST /api/admin/orders/{invoice}/manual-paid-fulfill` — [Dinonaktifkan / HTTP 403] Demi integritas dan keselamatan transaksi.
 * `POST /api/admin/orders/{invoice}/mark-refunded` — Menandai pesanan telah di-refund manual.
+* `GET /api/admin/last-login` — Mengambil waktu (WIB), IP, lokasi, dan riwayat login admin.
 * `GET /api/admin/settings` — Membaca pengaturan kurs, margin, dan Telegram CS.
 * `POST /api/admin/settings` — Memperbarui pengaturan kurs, margin, dan Telegram CS.
 

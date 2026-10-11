@@ -3,8 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +22,7 @@ type AdminHandler struct {
 	orderRepo    *repository.OrderRepository
 	settingRepo  *repository.SettingRepository
 	overrideRepo *repository.ProductOverrideRepository
+	loginRepo    *repository.AdminLoginRepository
 	dcClient     *service.DigitalCoreClient
 	orderService *service.OrderService
 }
@@ -29,6 +32,7 @@ func NewAdminHandler(
 	orderRepo *repository.OrderRepository,
 	settingRepo *repository.SettingRepository,
 	overrideRepo *repository.ProductOverrideRepository,
+	loginRepo *repository.AdminLoginRepository,
 	dcClient *service.DigitalCoreClient,
 	orderService *service.OrderService,
 ) *AdminHandler {
@@ -37,6 +41,7 @@ func NewAdminHandler(
 		orderRepo:    orderRepo,
 		settingRepo:  settingRepo,
 		overrideRepo: overrideRepo,
+		loginRepo:    loginRepo,
 		dcClient:     dcClient,
 		orderService: orderService,
 	}
@@ -67,6 +72,14 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := GenerateAdminToken(h.cfg.AdminSecretKey)
+
+	// Audit Log: Record admin login with IP, location, and device
+	if h.loginRepo != nil {
+		clientIP := extractClientIP(r)
+		location := extractLocation(r, clientIP)
+		deviceInfo := parseDeviceInfo(r.UserAgent())
+		_ = h.loginRepo.RecordLogin(req.Username, clientIP, r.UserAgent(), location, deviceInfo)
+	}
 
 	// Set persistent HTTP-only session cookie (30 days)
 	cookieVal := &http.Cookie{
@@ -486,28 +499,104 @@ func (h *AdminHandler) MarkRefunded(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ManualPaidAndFulfill handles POST /api/admin/orders/{invoice}/manual-paid-fulfill
+// ManualPaidAndFulfill is disabled to prevent unverified manual bypass and ensure transaction integrity
 func (h *AdminHandler) ManualPaidAndFulfill(w http.ResponseWriter, r *http.Request) {
-	invoice := chi.URLParam(r, "invoice")
-	if invoice == "" {
-		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"success": false,
-			"error":   "Nomor invoice wajib disertakan",
+	sendJSON(w, http.StatusForbidden, map[string]interface{}{
+		"success": false,
+		"error":   "Fitur pembayaran manual telah dinonaktifkan demi keselamatan dan integritas transaksi toko.",
+	})
+}
+
+// GetLastLogin handles GET /api/admin/last-login
+func (h *AdminHandler) GetLastLogin(w http.ResponseWriter, r *http.Request) {
+	if h.loginRepo == nil {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data": map[string]interface{}{
+				"last_login": nil,
+				"history":    []interface{}{},
+			},
 		})
 		return
 	}
 
-	if err := h.orderService.ManualMarkPaidAndFulfill(invoice); err != nil {
-		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
-		return
-	}
+	lastLogin, _ := h.loginRepo.GetLastLogin()
+	history, _ := h.loginRepo.GetLoginHistory(10)
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"message": "Pesanan berhasil ditandai Lunas dan fulfillment berhasil diproses!",
+		"data": map[string]interface{}{
+			"last_login":    lastLogin,
+			"current_login": lastLogin,
+			"history":       history,
+		},
 	})
 }
+
+func extractClientIP(r *http.Request) string {
+	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+		return strings.TrimSpace(ip)
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 && strings.TrimSpace(parts[0]) != "" {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	if ip := r.Header.Get("X-Real-IP"); ip != "" {
+		return strings.TrimSpace(ip)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil && host != "" {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+func extractLocation(r *http.Request, clientIP string) string {
+	city := strings.TrimSpace(r.Header.Get("CF-IPCity"))
+	country := strings.TrimSpace(r.Header.Get("CF-IPCountry"))
+	if city != "" && country != "" {
+		return fmt.Sprintf("%s, %s", city, country)
+	}
+	if country != "" {
+		return country
+	}
+	if clientIP == "127.0.0.1" || clientIP == "::1" || strings.HasPrefix(clientIP, "192.168.") || strings.HasPrefix(clientIP, "10.") {
+		return "Localhost / Jaringan Lokal"
+	}
+	return "Indonesia"
+}
+
+func parseDeviceInfo(ua string) string {
+	if ua == "" {
+		return "Unknown Device"
+	}
+	os := "Unknown OS"
+	if strings.Contains(ua, "Windows") {
+		os = "Windows"
+	} else if strings.Contains(ua, "Android") {
+		os = "Android"
+	} else if strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") {
+		os = "iOS"
+	} else if strings.Contains(ua, "Macintosh") || strings.Contains(ua, "Mac OS") {
+		os = "macOS"
+	} else if strings.Contains(ua, "Linux") {
+		os = "Linux"
+	}
+
+	browser := "Browser"
+	if strings.Contains(ua, "Edg/") {
+		browser = "Edge"
+	} else if strings.Contains(ua, "Chrome/") {
+		browser = "Chrome"
+	} else if strings.Contains(ua, "Firefox/") {
+		browser = "Firefox"
+	} else if strings.Contains(ua, "Safari/") && !strings.Contains(ua, "Chrome/") {
+		browser = "Safari"
+	}
+
+	return fmt.Sprintf("%s on %s", browser, os)
+}
+
 
