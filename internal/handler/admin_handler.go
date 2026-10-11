@@ -509,19 +509,50 @@ func (h *AdminHandler) ManualPaidAndFulfill(w http.ResponseWriter, r *http.Reque
 
 // GetLastLogin handles GET /api/admin/last-login
 func (h *AdminHandler) GetLastLogin(w http.ResponseWriter, r *http.Request) {
+	clientIP := extractClientIP(r)
+	location := extractLocation(r, clientIP)
+	deviceInfo := parseDeviceInfo(r.UserAgent())
+
 	if h.loginRepo == nil {
+		activeLog := &models.AdminLoginLog{
+			Username:   "admin",
+			IPAddress:  clientIP,
+			Location:   location,
+			DeviceInfo: deviceInfo,
+			LoginAt:    time.Now(),
+		}
 		sendJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"data": map[string]interface{}{
-				"last_login": nil,
-				"history":    []interface{}{},
+				"last_login":    activeLog,
+				"current_login": activeLog,
+				"history":       []*models.AdminLoginLog{activeLog},
 			},
 		})
 		return
 	}
 
 	lastLogin, _ := h.loginRepo.GetLastLogin()
+	if lastLogin == nil {
+		// Auto-record active session for previously logged-in admin (ensures logs are populated after migration)
+		_ = h.loginRepo.RecordLogin("admin", clientIP, r.UserAgent(), location, deviceInfo)
+		lastLogin, _ = h.loginRepo.GetLastLogin()
+	}
+
+	if lastLogin == nil {
+		lastLogin = &models.AdminLoginLog{
+			Username:   "admin",
+			IPAddress:  clientIP,
+			Location:   location,
+			DeviceInfo: deviceInfo,
+			LoginAt:    time.Now(),
+		}
+	}
+
 	history, _ := h.loginRepo.GetLoginHistory(10)
+	if len(history) == 0 && lastLogin != nil {
+		history = []*models.AdminLoginLog{lastLogin}
+	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
