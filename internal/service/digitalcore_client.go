@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -734,20 +735,31 @@ func (c *DigitalCoreClient) BuyProduct(slugOrID string, count int) (*DigitalCore
 		return nil, fmt.Errorf("DIGITALCORE_API_KEY is not configured")
 	}
 
-	targetID := interface{}(slugOrID)
-	// If slugOrID matches a product slug, resolve to upstream raw ID if available
+	targetSlug := strings.TrimSpace(slugOrID)
+	// Normalize spaces and dashes to underscores per DigitalCore slug convention (e.g. adobe_express_4_months_trial)
+	targetSlug = strings.ReplaceAll(targetSlug, " ", "_")
+	targetSlug = strings.ReplaceAll(targetSlug, "-", "_")
+
+	// Match against raw products to get canonical slug
 	if rawProds, err := c.FetchRawProducts(); err == nil {
 		for _, p := range rawProds {
-			if (p.Slug == slugOrID || strings.EqualFold(p.Name, slugOrID)) && p.RawID != nil {
-				targetID = p.RawID
+			if strings.EqualFold(p.Slug, slugOrID) || strings.EqualFold(p.Slug, targetSlug) || strings.EqualFold(p.Name, slugOrID) {
+				targetSlug = p.Slug
 				break
 			}
 		}
 	}
 
-	url := fmt.Sprintf("%s/api/user/buy", strings.TrimRight(c.cfg.DigitalCoreBaseURL, "/"))
+	baseURL := strings.TrimRight(c.cfg.DigitalCoreBaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://digitalcore.top"
+	}
+
+	// DigitalCore API documentation requires 'id' (string slug e.g. gemini_pro_18_months) and 'count'.
+	// Supplying both URL query parameters and JSON body ensures 100% compatibility with upstream server validators.
+	buyURL := fmt.Sprintf("%s/api/user/buy?id=%s&count=%d", baseURL, url.QueryEscape(targetSlug), count)
 	payload := map[string]interface{}{
-		"id":    targetID,
+		"id":    targetSlug,
 		"count": count,
 	}
 
@@ -756,7 +768,7 @@ func (c *DigitalCoreClient) BuyProduct(slugOrID string, count int) (*DigitalCore
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(bodyBytes))
+	req, err := http.NewRequest(http.MethodPost, buyURL, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return nil, err
 	}

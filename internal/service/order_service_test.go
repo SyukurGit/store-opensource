@@ -1,6 +1,10 @@
 package service
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -472,3 +476,63 @@ func TestProductPricingCustomAndPromoOverridesTiers(t *testing.T) {
 		t.Fatalf("raw cached product was unexpectedly mutated: price=%d tiers=%d", rawP1.PriceIDR, len(rawP1.Tiers))
 	}
 }
+
+func TestDigitalCoreBuyProductPayloadAndURL(t *testing.T) {
+	var capturedURL string
+	var capturedHeaderKey string
+	var capturedBody map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURL = r.URL.String()
+		capturedHeaderKey = r.Header.Get("Api-Key")
+
+		bodyBytes, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(bodyBytes, &capturedBody)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"success": true,
+			"order_id": "ORD-TEST-123",
+			"view_url": "https://digitalcore.top/order?number=test",
+			"total_amount": 0.30,
+			"quantity": 1,
+			"items": ["https://redeem.adobe.com/CODE123"]
+		}`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		DigitalCoreBaseURL: server.URL,
+		DigitalCoreAPIKey:  "test-secret-key-123",
+	}
+	client := NewDigitalCoreClient(cfg, nil, nil)
+
+	// Buy using slug with dash or mixed case
+	resp, err := client.BuyProduct("adobe-express-4-months-trial", 1)
+	if err != nil {
+		t.Fatalf("expected buy to succeed, got error: %v", err)
+	}
+
+	if resp.OrderID != "ORD-TEST-123" {
+		t.Fatalf("unexpected order id: %s", resp.OrderID)
+	}
+
+	if capturedHeaderKey != "test-secret-key-123" {
+		t.Fatalf("expected Api-Key header to be passed, got: %s", capturedHeaderKey)
+	}
+
+	// Verify query string contains id and count
+	if capturedURL != "/api/user/buy?id=adobe_express_4_months_trial&count=1" {
+		t.Fatalf("unexpected URL: %s", capturedURL)
+	}
+
+	// Verify body also contains id and count
+	if capturedBody["id"] != "adobe_express_4_months_trial" {
+		t.Fatalf("expected body id to be adobe_express_4_months_trial, got: %v", capturedBody["id"])
+	}
+	if capturedBody["count"] != float64(1) {
+		t.Fatalf("expected body count to be 1, got: %v", capturedBody["count"])
+	}
+}
+
