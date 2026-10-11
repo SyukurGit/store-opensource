@@ -380,5 +380,95 @@ func TestDigitalCoreCheckConnectionAndParse(t *testing.T) {
 	}
 }
 
+func TestProductPricingCustomAndPromoOverridesTiers(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
 
+	overrideRepo := repository.NewProductOverrideRepository(db)
+	settingRepo := repository.NewSettingRepository(db)
+	cfg := &config.Config{ProfitMarginPercent: 25.0, USDToIDRRate: 18000.0}
+	pricing := NewPricingService(cfg, settingRepo)
+	dcClient := NewDigitalCoreClient(cfg, pricing, overrideRepo)
 
+	// Setup cached raw products
+	rawP1 := &models.Product{
+		Slug:     "prod-custom",
+		Name:     "Custom Product",
+		PriceUSD: 1.0,
+		PriceIDR: 22500, // 1 * 18000 * 1.25 = 22500
+		Stock:    10,
+		Tiers: []models.ProductTier{
+			{MinQty: 1, MaxQty: nil, PriceUSD: 0.9, PriceIDR: 20250},
+		},
+	}
+	rawP2 := &models.Product{
+		Slug:     "prod-normal",
+		Name:     "Normal Product",
+		PriceUSD: 2.0,
+		PriceIDR: 45000,
+		Stock:    5,
+		Tiers: []models.ProductTier{
+			{MinQty: 1, MaxQty: nil, PriceUSD: 1.8, PriceIDR: 40500},
+		},
+	}
+	dcClient.cachedProds = []*models.Product{rawP1, rawP2}
+	dcClient.cacheExpires = time.Now().Add(1 * time.Hour)
+
+	// Save override for prod-custom
+	err = overrideRepo.Upsert(&models.ProductOverride{
+		ProductSlug:      "prod-custom",
+		CustomPriceIDR:   35000,
+		BaselineModalIDR: 18000,
+		IsActive:         true,
+	})
+	if err != nil {
+		t.Fatalf("failed to save override: %v", err)
+	}
+
+	prods, err := dcClient.FetchProducts()
+	if err != nil {
+		t.Fatalf("FetchProducts failed: %v", err)
+	}
+
+	var foundCustom, foundNormal *models.Product
+	for _, p := range prods {
+		if p.Slug == "prod-custom" {
+			foundCustom = p
+		} else if p.Slug == "prod-normal" {
+			foundNormal = p
+		}
+	}
+
+	if foundCustom == nil || foundNormal == nil {
+		t.Fatalf("expected both products returned")
+	}
+
+	// Customized product should have CustomPriceIDR as PriceIDR and Tiers cleared
+	if foundCustom.PriceIDR != 35000 {
+		t.Fatalf("expected customized price 35000, got %d", foundCustom.PriceIDR)
+	}
+	if len(foundCustom.Tiers) != 0 {
+		t.Fatalf("expected tiers to be cleared for customized product, got %d tiers", len(foundCustom.Tiers))
+	}
+	if !foundCustom.IsCustomized {
+		t.Fatalf("expected IsCustomized to be true")
+	}
+
+	// Normal product should retain its tiers and default price
+	if foundNormal.PriceIDR != 45000 {
+		t.Fatalf("expected normal price 45000, got %d", foundNormal.PriceIDR)
+	}
+	if len(foundNormal.Tiers) != 1 {
+		t.Fatalf("expected normal tiers preserved, got %d", len(foundNormal.Tiers))
+	}
+
+	// Verify that raw cached products were NOT mutated
+	if rawP1.PriceIDR != 22500 || len(rawP1.Tiers) != 1 {
+		t.Fatalf("raw cached product was unexpectedly mutated: price=%d tiers=%d", rawP1.PriceIDR, len(rawP1.Tiers))
+	}
+}

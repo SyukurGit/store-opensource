@@ -215,7 +215,20 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 	maxSurgeDisablePct := c.pricing.GetMaxSurgeDisablePercent()
 
 	var publicProducts []*models.Product
-	for _, p := range rawProducts {
+	for _, rawP := range rawProducts {
+		// Deep copy to prevent mutating the in-memory cached products
+		p := *rawP
+		if rawP.Tiers != nil {
+			p.Tiers = make([]models.ProductTier, len(rawP.Tiers))
+			copy(p.Tiers, rawP.Tiers)
+		}
+
+		// Calculate pristine default environment formula price
+		defaultEnvPrice := c.pricing.ConvertUSDToIDR(rawP.PriceUSD)
+		minSafePrice := defaultEnvPrice
+		p.PriceIDR = defaultEnvPrice
+		p.ReferencePriceIDR = defaultEnvPrice
+
 		ov, hasOv := overrides[p.Slug]
 		if hasOv {
 			// If disabled by admin, do not display in public catalog
@@ -250,10 +263,7 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 				continue
 			}
 
-			// Calculate minimum safe price ensuring default profit margin
-			minSafePrice := p.PriceIDR // default env price (modal + default margin)
-
-			refPrice := p.PriceIDR
+			refPrice := defaultEnvPrice
 			if ov.CustomPriceIDR > 0 {
 				refPrice = ov.CustomPriceIDR
 				if deltaModal > 0 {
@@ -307,6 +317,9 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 			p.IsCustomized = true
 			p.BaselineModalIDR = baselineModal
 			p.SurgePercent = surgePct
+
+			// Clear conflicting wholesale tiers for customized products so detail page & checkout match root catalog exactly
+			p.Tiers = nil
 		} else {
 			p.Terms = "Membeli berarti setuju"
 			p.ReferencePriceIDR = p.PriceIDR
@@ -315,7 +328,7 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 			p.DiscountPercent = 0
 		}
 		p.IsActive = true
-		publicProducts = append(publicProducts, p)
+		publicProducts = append(publicProducts, &p)
 	}
 
 	return publicProducts, nil
@@ -354,7 +367,7 @@ func (c *DigitalCoreClient) FetchAdminProducts() ([]*models.AdminProductItem, er
 	var adminItems []*models.AdminProductItem
 	for _, p := range rawProducts {
 		modalIDR := int64(math.Round(p.PriceUSD * c.pricing.GetUSDRate()))
-		envPriceIDR := p.PriceIDR // which was calculated via ConvertUSDToIDR
+		envPriceIDR := c.pricing.ConvertUSDToIDR(p.PriceUSD)
 
 		item := &models.AdminProductItem{
 			Slug:                p.Slug,
