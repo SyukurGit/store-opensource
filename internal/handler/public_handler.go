@@ -4,25 +4,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"storeku/internal/config"
 	"storeku/internal/models"
+	"storeku/internal/repository"
 	"storeku/internal/service"
 )
 
 type PublicHandler struct {
-	cfg          *config.Config
-	dcClient     *service.DigitalCoreClient
-	orderService *service.OrderService
+	cfg            *config.Config
+	dcClient       *service.DigitalCoreClient
+	orderService   *service.OrderService
+	settingRepo    *repository.SettingRepository
+	lastCheckTimes map[string]time.Time
+	checkMu        sync.Mutex
 }
 
-func NewPublicHandler(cfg *config.Config, dcClient *service.DigitalCoreClient, orderService *service.OrderService) *PublicHandler {
+func NewPublicHandler(cfg *config.Config, dcClient *service.DigitalCoreClient, orderService *service.OrderService, settingRepo *repository.SettingRepository) *PublicHandler {
 	return &PublicHandler{
-		cfg:          cfg,
-		dcClient:     dcClient,
-		orderService: orderService,
+		cfg:            cfg,
+		dcClient:       dcClient,
+		orderService:   orderService,
+		settingRepo:    settingRepo,
+		lastCheckTimes: make(map[string]time.Time),
 	}
 }
 
@@ -39,9 +47,16 @@ func (h *PublicHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 // GetAppConfig handles GET /api/config
 func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 	username := "Digimestsupport"
-	if h.cfg != nil && h.cfg.TelegramSupportUsername != "" {
+	if h.settingRepo != nil {
+		if dbUser := h.settingRepo.Get("telegram_cs_username", ""); dbUser != "" {
+			username = dbUser
+		} else if h.cfg != nil && h.cfg.TelegramSupportUsername != "" {
+			username = h.cfg.TelegramSupportUsername
+		}
+	} else if h.cfg != nil && h.cfg.TelegramSupportUsername != "" {
 		username = h.cfg.TelegramSupportUsername
 	}
+
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":           true,
 		"telegram_username": username,
@@ -154,6 +169,31 @@ func (h *PublicHandler) TriggerCheck(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	// Throttling: Maksimal 1 call per 4 detik per invoice agar tidak membanjiri gateway & server
+	h.checkMu.Lock()
+	lastCheck, exists := h.lastCheckTimes[invoice]
+	now := time.Now()
+	if exists && now.Sub(lastCheck) < 4*time.Second {
+		h.checkMu.Unlock()
+		// Kembalikan status terkini tanpa memanggil ulang ke gateway
+		status, err := h.orderService.GetOrderStatus(invoice)
+		if err != nil {
+			sendJSON(w, http.StatusOK, map[string]interface{}{
+				"success": true,
+				"message": "Pemeriksaan mutasi baru saja dilakukan. Mohon tunggu sejenak.",
+			})
+			return
+		}
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "Pemeriksaan mutasi baru saja dilakukan.",
+			"data":    status,
+		})
+		return
+	}
+	h.lastCheckTimes[invoice] = now
+	h.checkMu.Unlock()
 
 	if err := h.orderService.TriggerInstantCheck(invoice); err != nil {
 		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{

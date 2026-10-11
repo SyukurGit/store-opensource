@@ -43,7 +43,7 @@ func main() {
 	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
 
 	// 5. Initialize Handlers
-	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService)
+	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService, settingRepo)
 	webhookHandler := handler.NewWebhookHandler(orderService, pgClient, orderRepo)
 	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, dcClient, orderService)
 
@@ -114,6 +114,9 @@ func main() {
 	r.Handle("/css/*", http.StripPrefix("/css/", http.FileServer(http.Dir(filepath.Join(webDir, "css")))))
 	r.Handle("/js/*", http.StripPrefix("/js/", http.FileServer(http.Dir(filepath.Join(webDir, "js")))))
 	r.Handle("/logo/*", http.StripPrefix("/logo/", http.FileServer(http.Dir(filepath.Join(webDir, "logo")))))
+	r.Get("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "robots.txt"))
+	})
 
 	// 301 Permanent Redirects for legacy .html URLs
 	cleanRedirects := map[string]string{

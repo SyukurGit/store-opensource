@@ -121,7 +121,7 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 
 	// 3. Generate unique Invoice Number and Claim Code
 	datePrefix := time.Now().Format("20060102")
-	invoiceNumber := fmt.Sprintf("INV-%s-%s", datePrefix, generateRandomString(4))
+	invoiceNumber := fmt.Sprintf("INV-%s-%s", datePrefix, generateRandomString(6))
 	claimCode := fmt.Sprintf("CLM-%s", generateRandomString(6))
 
 	// 4. Request QRIS tagihan from PaymentG
@@ -300,13 +300,13 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 		return fmt.Errorf("pesanan '%s' tidak ditemukan", invoice)
 	}
 
-	// Idempotency check: if already marked PAID, don't execute buy upstream again
-	if order.PaymentStatus == "PAID" && order.FulfillmentStatus == "SUCCESS" {
-		log.Printf("[IDEMPOTENT] Order %s already paid and fulfilled. Skipping.", invoice)
+	// Idempotency check: if already fulfilled or refunded, don't execute buy upstream again
+	if order.FulfillmentStatus == "SUCCESS" || order.FulfillmentStatus == "REFUNDED" {
+		log.Printf("[IDEMPOTENT] Order %s fulfillment status is %s. Skipping upstream buy.", invoice, order.FulfillmentStatus)
 		return nil
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	if order.PaymentStatus != "PAID" {
 		if err := s.orderRepo.UpdatePaymentStatus(invoice, "PAID", &now); err != nil {
 			log.Printf("Error updating payment status for %s: %v", invoice, err)
@@ -390,8 +390,8 @@ func (s *OrderService) ForceFulfillOrder(invoice string) error {
 		return fmt.Errorf("pesanan belum berstatus PAID")
 	}
 
-	if order.FulfillmentStatus == "SUCCESS" {
-		return fmt.Errorf("pesanan sudah berhasil dipenuhi sebelumnya")
+	if order.FulfillmentStatus == "SUCCESS" || order.FulfillmentStatus == "REFUNDED" {
+		return fmt.Errorf("pesanan sudah berstatus %s, tidak dapat dipenuhi", order.FulfillmentStatus)
 	}
 
 	log.Printf("[FORCE FULFILL] Admin forced buy for %s (Product: %s, Qty: %d)...", invoice, order.ProductSlug, order.Quantity)
@@ -415,11 +415,11 @@ func (s *OrderService) ManualMarkPaidAndFulfill(invoice string) error {
 	if err != nil {
 		return fmt.Errorf("pesanan '%s' tidak ditemukan", invoice)
 	}
-	if order.FulfillmentStatus == "SUCCESS" {
-		return fmt.Errorf("pesanan sudah berhasil dipenuhi sebelumnya")
+	if order.FulfillmentStatus == "SUCCESS" || order.FulfillmentStatus == "REFUNDED" {
+		return fmt.Errorf("pesanan sudah berstatus %s, tidak dapat dipenuhi manual", order.FulfillmentStatus)
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	if err := s.orderRepo.UpdatePaymentStatus(invoice, "PAID", &now); err != nil {
 		return fmt.Errorf("gagal mengupdate status pesanan menjadi PAID: %w", err)
 	}
@@ -438,6 +438,7 @@ func (s *OrderService) MarkRefundedOrder(invoice string) error {
 		return fmt.Errorf("pesanan yang sudah berhasil dikirim tidak dapat ditandai refund")
 	}
 
+	_ = s.orderRepo.UpdatePaymentStatus(invoice, "REFUNDED", order.PaidAt)
 	return s.orderRepo.UpdateFulfillment(invoice, "REFUNDED", "Refund dana telah diselesaikan oleh admin", "", "", "[]")
 }
 

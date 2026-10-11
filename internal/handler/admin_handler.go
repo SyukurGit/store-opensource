@@ -219,6 +219,13 @@ func (h *AdminHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	if _, ok := all["max_surge_disable_percent"]; !ok {
 		all["max_surge_disable_percent"] = "50"
 	}
+	if _, ok := all["telegram_cs_username"]; !ok {
+		teleUser := "Digimestsupport"
+		if h.cfg != nil && h.cfg.TelegramSupportUsername != "" {
+			teleUser = h.cfg.TelegramSupportUsername
+		}
+		all["telegram_cs_username"] = teleUser
+	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -242,6 +249,7 @@ func (h *AdminHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 		"margin_percent":            true,
 		"margin_fixed":              true,
 		"max_surge_disable_percent": true,
+		"telegram_cs_username":      true,
 	}
 
 	for k, v := range body {

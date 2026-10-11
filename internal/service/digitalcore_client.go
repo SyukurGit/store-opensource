@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"storeku/internal/config"
@@ -20,6 +22,9 @@ type DigitalCoreClient struct {
 	httpClient   *http.Client
 	pricing      *PricingService
 	overrideRepo *repository.ProductOverrideRepository
+	cacheMu      sync.RWMutex
+	cachedProds  []*models.Product
+	cacheExpires time.Time
 }
 
 func NewDigitalCoreClient(cfg *config.Config, pricing *PricingService, overrideRepo *repository.ProductOverrideRepository) *DigitalCoreClient {
@@ -74,12 +79,33 @@ func toSlug(name string) string {
 	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(name)), " ", "_")
 }
 
+// fallbackCachedOrError returns last cached products if available, or the error if empty
+func (c *DigitalCoreClient) fallbackCachedOrError(err error) ([]*models.Product, error) {
+	c.cacheMu.RLock()
+	defer c.cacheMu.RUnlock()
+	if len(c.cachedProds) > 0 {
+		log.Printf("[DIGITALCORE FALLBACK] Upstream micro-outage: %v. Serving last cached catalog (%d products).", err, len(c.cachedProds))
+		return c.cachedProds, nil
+	}
+	return nil, err
+}
+
 // FetchRawProducts fetches all active products directly from DigitalCore and computes baseline IDR
 func (c *DigitalCoreClient) FetchRawProducts() ([]*models.Product, error) {
+	// 1. Check in-memory cache first (45s TTL)
+	c.cacheMu.RLock()
+	if len(c.cachedProds) > 0 && time.Now().Before(c.cacheExpires) {
+		cached := c.cachedProds
+		c.cacheMu.RUnlock()
+		return cached, nil
+	}
+	c.cacheMu.RUnlock()
+
+	// 2. Fetch fresh products from DigitalCore
 	url := fmt.Sprintf("%s/api/public/products", strings.TrimRight(c.cfg.DigitalCoreBaseURL, "/"))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return c.fallbackCachedOrError(fmt.Errorf("failed to create request: %w", err))
 	}
 
 	if c.cfg.DigitalCoreAPIKey != "" {
@@ -88,18 +114,18 @@ func (c *DigitalCoreClient) FetchRawProducts() ([]*models.Product, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
+		return c.fallbackCachedOrError(fmt.Errorf("failed to execute request: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("digitalcore returned status %d: %s", resp.StatusCode, string(body))
+		return c.fallbackCachedOrError(fmt.Errorf("digitalcore returned status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	var rawProds []DigitalCoreRawProduct
 	if err := json.NewDecoder(resp.Body).Decode(&rawProds); err != nil {
-		return nil, fmt.Errorf("failed to decode products: %w", err)
+		return c.fallbackCachedOrError(fmt.Errorf("failed to decode products: %w", err))
 	}
 
 	var products []*models.Product
@@ -161,6 +187,12 @@ func (c *DigitalCoreClient) FetchRawProducts() ([]*models.Product, error) {
 			IsCustomized:      false,
 		})
 	}
+
+	// 3. Save into cache with 45s TTL
+	c.cacheMu.Lock()
+	c.cachedProds = products
+	c.cacheExpires = time.Now().Add(45 * time.Second)
+	c.cacheMu.Unlock()
 
 	return products, nil
 }

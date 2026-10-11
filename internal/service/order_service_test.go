@@ -306,4 +306,47 @@ func TestProductOverrideForceOutOfStockRepo(t *testing.T) {
 	}
 }
 
+func TestRefundedOrderProtection(t *testing.T) {
+	svc, repo := setupTestOrderService(t)
+
+	exp := time.Now().Add(15 * time.Minute)
+	order := &models.Order{
+		InvoiceNumber:     "INV-REFUND-001",
+		ClaimCode:         "CLM-REFUND-001",
+		ProductSlug:       "test-prod",
+		ProductName:       "Test Product",
+		Quantity:          1,
+		TotalAmount:       50000,
+		PaymentStatus:     "PAID",
+		FulfillmentStatus: "FAILED",
+		ExpiresAt:         &exp,
+	}
+	if err := repo.CreateOrder(order); err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
+
+	// 1. Mark as refunded
+	if err := svc.MarkRefundedOrder("INV-REFUND-001"); err != nil {
+		t.Fatalf("expected MarkRefundedOrder to succeed, got: %v", err)
+	}
+
+	o, err := repo.GetOrderByInvoice("INV-REFUND-001")
+	if err != nil {
+		t.Fatalf("failed to get order: %v", err)
+	}
+	if o.PaymentStatus != "REFUNDED" || o.FulfillmentStatus != "REFUNDED" {
+		t.Fatalf("expected REFUNDED status, got payment=%s fulfillment=%s", o.PaymentStatus, o.FulfillmentStatus)
+	}
+
+	// 2. RetryFulfillment must fail
+	if err := svc.RetryFulfillment("INV-REFUND-001"); err == nil {
+		t.Fatalf("expected RetryFulfillment to fail on REFUNDED order, got nil")
+	}
+
+	// 3. ForceFulfillOrder must fail
+	if err := svc.ForceFulfillOrder("INV-REFUND-001"); err == nil {
+		t.Fatalf("expected ForceFulfillOrder to fail on REFUNDED order, got nil")
+	}
+}
+
 
