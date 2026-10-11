@@ -93,6 +93,8 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(handler.AdminAuthMiddleware(cfg))
 			r.Get("/admin/stats", adminHandler.GetStats)
+			r.Get("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
+			r.Post("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
 			r.Get("/admin/products", adminHandler.ListProducts)
 			r.Post("/admin/products/{slug}", adminHandler.SaveProductOverride)
 			r.Post("/admin/products/{slug}/reset", adminHandler.ResetProductOverride)

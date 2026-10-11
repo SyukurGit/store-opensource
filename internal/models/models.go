@@ -206,6 +206,21 @@ type AdminStats struct {
 	FailedOrders         int64   `json:"failed_orders"`
 	DigitalCoreBalance   float64 `json:"digitalcore_balance"`
 	DigitalCoreOrders    string  `json:"digitalcore_orders"`
+	DigitalCoreConnected bool    `json:"digitalcore_connected"`
+	DigitalCoreError     string  `json:"digitalcore_error,omitempty"`
 	TodayRevenueIDR      int64   `json:"today_revenue_idr"`
 	TodayOrders          int64   `json:"today_orders"`
+}
+
+// DigitalCoreCheckResult provides health & diagnostic information about upstream DigitalCore connection
+type DigitalCoreCheckResult struct {
+	Success      bool    `json:"success"`
+	Configured   bool    `json:"configured"`
+	BaseURL      string  `json:"base_url"`
+	APIKeyMasked string  `json:"api_key_masked"`
+	HTTPStatus   int     `json:"http_status"`
+	Balance      float64 `json:"balance"`
+	TotalOrders  string  `json:"total_orders"`
+	RawResponse  string  `json:"raw_response,omitempty"`
+	Message      string  `json:"message"`
 }

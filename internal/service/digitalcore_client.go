@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -497,6 +498,103 @@ func (c *DigitalCoreClient) GetProductLiveCost(slug string, qty int) (float64, e
 	return 0, fmt.Errorf("produk '%s' tidak ditemukan di upstream", slug)
 }
 
+func extractFloat(val interface{}) (float64, bool) {
+	if val == nil {
+		return 0, false
+	}
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case json.Number:
+		if f, err := v.Float64(); err == nil {
+			return f, true
+		}
+	case string:
+		clean := strings.TrimSpace(v)
+		clean = strings.TrimPrefix(clean, "$")
+		clean = strings.TrimSpace(clean)
+		if f, err := strconv.ParseFloat(clean, 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
+func extractString(val interface{}) string {
+	if val == nil {
+		return "0"
+	}
+	switch v := val.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func parseDigitalCoreUserMe(bodyBytes []byte) (balance float64, totalOrders string, err error) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+		return 0, "0", fmt.Errorf("failed to decode JSON response: %w", err)
+	}
+
+	lookupMaps := []map[string]interface{}{raw}
+	for _, nestedKey := range []string{"data", "user", "account", "result"} {
+		if nested, ok := raw[nestedKey].(map[string]interface{}); ok {
+			lookupMaps = append(lookupMaps, nested)
+		}
+	}
+
+	balanceFound := false
+	balanceKeys := []string{"balance", "wallet", "saldo", "credit", "amount"}
+	for _, m := range lookupMaps {
+		for _, k := range balanceKeys {
+			if v, ok := m[k]; ok {
+				if f, ok := extractFloat(v); ok {
+					balance = f
+					balanceFound = true
+					break
+				}
+			}
+		}
+		if balanceFound {
+			break
+		}
+	}
+
+	orderKeys := []string{"total_orders", "totalOrders", "orders", "order_count", "total"}
+	for _, m := range lookupMaps {
+		for _, k := range orderKeys {
+			if v, ok := m[k]; ok {
+				totalOrders = extractString(v)
+				break
+			}
+		}
+		if totalOrders != "" && totalOrders != "0" {
+			break
+		}
+	}
+	if totalOrders == "" {
+		totalOrders = "0"
+	}
+
+	return balance, totalOrders, nil
+}
+
 // GetUserAccount fetches the current Telegram bot balance and orders count
 func (c *DigitalCoreClient) GetUserAccount() (*DigitalCoreMeResponse, error) {
 	if c.cfg.DigitalCoreAPIKey == "" {
@@ -517,17 +615,104 @@ func (c *DigitalCoreClient) GetUserAccount() (*DigitalCoreMeResponse, error) {
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("digitalcore /me error %d: %s", resp.StatusCode, string(body))
 	}
 
-	var me DigitalCoreMeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
+	balance, totalOrders, err := parseDigitalCoreUserMe(body)
+	if err != nil {
+		var me DigitalCoreMeResponse
+		if uerr := json.Unmarshal(body, &me); uerr == nil {
+			return &me, nil
+		}
 		return nil, err
 	}
 
-	return &me, nil
+	return &DigitalCoreMeResponse{
+		Balance:     balance,
+		TotalOrders: totalOrders,
+	}, nil
+}
+
+// CheckConnection tests the DigitalCore upstream API and returns detailed diagnostic info
+func (c *DigitalCoreClient) CheckConnection() (*models.DigitalCoreCheckResult, error) {
+	apiKey := strings.TrimSpace(c.cfg.DigitalCoreAPIKey)
+	baseURL := strings.TrimRight(c.cfg.DigitalCoreBaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://digitalcore.top"
+	}
+
+	maskedKey := "(belum diatur di .env)"
+	if apiKey != "" {
+		if len(apiKey) <= 6 {
+			maskedKey = "***"
+		} else {
+			maskedKey = apiKey[:3] + "..." + apiKey[len(apiKey)-3:]
+		}
+	}
+
+	result := &models.DigitalCoreCheckResult{
+		Success:      false,
+		Configured:   apiKey != "",
+		BaseURL:      baseURL,
+		APIKeyMasked: maskedKey,
+		HTTPStatus:   0,
+		Balance:      0,
+		TotalOrders:  "0",
+	}
+
+	if apiKey == "" {
+		result.Message = "DIGITALCORE_API_KEY belum dikonfigurasi di file .env VPS."
+		return result, fmt.Errorf("%s", result.Message)
+	}
+
+	url := fmt.Sprintf("%s/api/user/me", baseURL)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		result.Message = fmt.Sprintf("Gagal membuat request: %v", err)
+		return result, err
+	}
+
+	req.Header.Set("Api-Key", apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		result.Message = fmt.Sprintf("Gagal menghubungi server DigitalCore: %v", err)
+		return result, err
+	}
+	defer resp.Body.Close()
+
+	result.HTTPStatus = resp.StatusCode
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		result.Message = fmt.Sprintf("Gagal membaca respon DigitalCore: %v", err)
+		return result, err
+	}
+	result.RawResponse = string(bodyBytes)
+
+	if resp.StatusCode != http.StatusOK {
+		result.Message = fmt.Sprintf("DigitalCore menolak request (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+		return result, fmt.Errorf("%s", result.Message)
+	}
+
+	balance, totalOrders, err := parseDigitalCoreUserMe(bodyBytes)
+	if err != nil {
+		result.Message = fmt.Sprintf("HTTP 200 OK tetapi gagal parsing format JSON: %v", err)
+		return result, err
+	}
+
+	result.Success = true
+	result.Balance = balance
+	result.TotalOrders = totalOrders
+	result.Message = fmt.Sprintf("Koneksi DigitalCore sukses! Saldo bot: $%.2f USD | Total order: %s", balance, totalOrders)
+
+	return result, nil
 }
 
 // BuyProduct executes the purchase transaction on DigitalCore

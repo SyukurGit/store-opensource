@@ -349,4 +349,36 @@ func TestRefundedOrderProtection(t *testing.T) {
 	}
 }
 
+func TestDigitalCoreCheckConnectionAndParse(t *testing.T) {
+	cfg := &config.Config{
+		DigitalCoreBaseURL: "https://digitalcore.top",
+		DigitalCoreAPIKey:  "",
+	}
+	client := NewDigitalCoreClient(cfg, nil, nil)
+
+	// 1. When empty, check fails gracefully
+	res, err := client.CheckConnection()
+	if err == nil {
+		t.Fatalf("expected error when API key is empty, got nil")
+	}
+	if res.Configured {
+		t.Fatalf("expected Configured to be false")
+	}
+
+	// 2. Test JSON parsing with top level balance
+	jsonTop := []byte(`{"balance": 25.50, "total_orders": 12}`)
+	bal, orders, err := parseDigitalCoreUserMe(jsonTop)
+	if err != nil || bal != 25.50 || orders != "12" {
+		t.Fatalf("failed parsing top-level json: bal=%f orders=%s err=%v", bal, orders, err)
+	}
+
+	// 3. Test JSON parsing with nested data & string balance
+	jsonNested := []byte(`{"success": true, "data": {"balance": "14.25", "total_orders": "8"}}`)
+	bal, orders, err = parseDigitalCoreUserMe(jsonNested)
+	if err != nil || bal != 14.25 || orders != "8" {
+		t.Fatalf("failed parsing nested json: bal=%f orders=%s err=%v", bal, orders, err)
+	}
+}
+
+
 

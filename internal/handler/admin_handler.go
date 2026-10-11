@@ -129,16 +129,39 @@ func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	// Fetch upstream DigitalCore balance in USD
 	if dcMe, err := h.dcClient.GetUserAccount(); err == nil && dcMe != nil {
 		stats.DigitalCoreBalance = dcMe.Balance
+		stats.DigitalCoreConnected = true
 		if str, ok := dcMe.TotalOrders.(string); ok {
 			stats.DigitalCoreOrders = str
 		} else {
 			stats.DigitalCoreOrders = strconv.Itoa(int(dcMe.Balance))
 		}
+	} else if err != nil {
+		stats.DigitalCoreConnected = false
+		stats.DigitalCoreError = err.Error()
 	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    stats,
+	})
+}
+
+// CheckDigitalCoreConnection handles GET and POST /api/admin/digitalcore/check
+func (h *AdminHandler) CheckDigitalCoreConnection(w http.ResponseWriter, r *http.Request) {
+	result, err := h.dcClient.CheckConnection()
+	if err != nil {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"data":    result,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": result.Success,
+		"data":    result,
+		"message": result.Message,
 	})
 }
 
