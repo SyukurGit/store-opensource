@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -93,6 +94,16 @@ func (h *PublicHandler) GetProductDetail(w http.ResponseWriter, r *http.Request)
 	}
 
 	product, err := h.dcClient.GetPublicProductBySlug(slug)
+	if err != nil {
+		if unescaped, uerr := url.PathUnescape(slug); uerr == nil && unescaped != slug {
+			product, err = h.dcClient.GetPublicProductBySlug(unescaped)
+		}
+	}
+	if err != nil {
+		if unescaped, uerr := url.QueryUnescape(slug); uerr == nil && unescaped != slug {
+			product, err = h.dcClient.GetPublicProductBySlug(unescaped)
+		}
+	}
 	if err != nil {
 		sendJSON(w, http.StatusNotFound, map[string]interface{}{
 			"success": false,
