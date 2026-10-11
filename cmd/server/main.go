@@ -95,6 +95,8 @@ func main() {
 			r.Use(handler.AdminAuthMiddleware(cfg))
 			r.Get("/admin/stats", adminHandler.GetStats)
 			r.Get("/admin/last-login", adminHandler.GetLastLogin)
+			r.Get("/admin/security/logs", adminHandler.GetSecurityLogs)
+			r.Get("/admin/security/stats", adminHandler.GetSecurityStats)
 			r.Get("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
 			r.Post("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
 			r.Get("/admin/products", adminHandler.ListProducts)
@@ -137,6 +139,7 @@ func main() {
 		"/admin/login.html":    "/admin/login",
 		"/admin/products.html": "/admin/products",
 		"/admin/orders.html":   "/admin/orders",
+		"/admin/security.html": "/admin/security",
 		"/admin/settings.html": "/admin/settings",
 	}
 	for oldPath, newPath := range cleanRedirects {
@@ -206,6 +209,9 @@ func main() {
 	})
 	r.Get("/admin/orders", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "orders.html"))
+	})
+	r.Get("/admin/security", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "security.html"))
 	})
 	r.Get("/admin/settings", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "settings.html"))

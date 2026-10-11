@@ -64,6 +64,8 @@ func RunMigrations(db *sql.DB) error {
 			user_agent TEXT NOT NULL,
 			location TEXT DEFAULT '',
 			device_info TEXT DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'SUCCESS',
+			failure_reason TEXT DEFAULT '',
 			login_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
 
@@ -74,6 +76,8 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_product_overrides_active ON product_overrides(is_active);`,
 		`CREATE INDEX IF NOT EXISTS idx_admin_login_at ON admin_login_logs(login_at);`,
+		`CREATE INDEX IF NOT EXISTS idx_admin_login_status ON admin_login_logs(status);`,
+		`CREATE INDEX IF NOT EXISTS idx_admin_login_ip ON admin_login_logs(ip_address);`,
 	}
 
 	for _, q := range queries {
@@ -90,6 +94,8 @@ func RunMigrations(db *sql.DB) error {
 	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN baseline_modal_idr INTEGER DEFAULT 0;")
 	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN is_auto_suspended INTEGER DEFAULT 0;")
 	_, _ = db.Exec("ALTER TABLE product_overrides ADD COLUMN is_force_out_of_stock INTEGER DEFAULT 0;")
+	_, _ = db.Exec("ALTER TABLE admin_login_logs ADD COLUMN status TEXT DEFAULT 'SUCCESS';")
+	_, _ = db.Exec("ALTER TABLE admin_login_logs ADD COLUMN failure_reason TEXT DEFAULT '';")
 
 	return nil
 }

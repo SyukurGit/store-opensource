@@ -63,7 +63,18 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clientIP := extractClientIP(r)
+	location := extractLocation(r, clientIP)
+	deviceInfo := parseDeviceInfo(r.UserAgent())
+
 	if req.Username != h.cfg.AdminUsername || req.Password != h.cfg.AdminPassword {
+		failReason := "Password salah"
+		if req.Username != h.cfg.AdminUsername {
+			failReason = fmt.Sprintf("Username '%s' tidak terdaftar", req.Username)
+		}
+		if h.loginRepo != nil {
+			_ = h.loginRepo.RecordLogin(req.Username, clientIP, r.UserAgent(), location, deviceInfo, "FAILED", failReason)
+		}
 		sendJSON(w, http.StatusUnauthorized, map[string]interface{}{
 			"success": false,
 			"error":   "Username atau password salah",
@@ -73,12 +84,9 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	token := GenerateAdminToken(h.cfg.AdminSecretKey)
 
-	// Audit Log: Record admin login with IP, location, and device
+	// Audit Log: Record successful admin login with IP, location, and device
 	if h.loginRepo != nil {
-		clientIP := extractClientIP(r)
-		location := extractLocation(r, clientIP)
-		deviceInfo := parseDeviceInfo(r.UserAgent())
-		_ = h.loginRepo.RecordLogin(req.Username, clientIP, r.UserAgent(), location, deviceInfo)
+		_ = h.loginRepo.RecordLogin(req.Username, clientIP, r.UserAgent(), location, deviceInfo, "SUCCESS", "Login berhasil")
 	}
 
 	// Set persistent HTTP-only session cookie (30 days)
@@ -535,17 +543,19 @@ func (h *AdminHandler) GetLastLogin(w http.ResponseWriter, r *http.Request) {
 	lastLogin, _ := h.loginRepo.GetLastLogin()
 	if lastLogin == nil {
 		// Auto-record active session for previously logged-in admin (ensures logs are populated after migration)
-		_ = h.loginRepo.RecordLogin("admin", clientIP, r.UserAgent(), location, deviceInfo)
+		_ = h.loginRepo.RecordLogin("admin", clientIP, r.UserAgent(), location, deviceInfo, "SUCCESS", "Sesi aktif")
 		lastLogin, _ = h.loginRepo.GetLastLogin()
 	}
 
 	if lastLogin == nil {
 		lastLogin = &models.AdminLoginLog{
-			Username:   "admin",
-			IPAddress:  clientIP,
-			Location:   location,
-			DeviceInfo: deviceInfo,
-			LoginAt:    time.Now(),
+			Username:      "admin",
+			IPAddress:     clientIP,
+			Location:      location,
+			DeviceInfo:    deviceInfo,
+			Status:        "SUCCESS",
+			FailureReason: "Sesi aktif",
+			LoginAt:       time.Now(),
 		}
 	}
 
@@ -561,6 +571,97 @@ func (h *AdminHandler) GetLastLogin(w http.ResponseWriter, r *http.Request) {
 			"current_login": lastLogin,
 			"history":       history,
 		},
+	})
+}
+
+// GetSecurityLogs handles GET /api/admin/security/logs
+func (h *AdminHandler) GetSecurityLogs(w http.ResponseWriter, r *http.Request) {
+	if h.loginRepo == nil {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data": map[string]interface{}{
+				"logs":  []interface{}{},
+				"total": 0,
+			},
+		})
+		return
+	}
+
+	statusFilter := r.URL.Query().Get("status")
+	searchQuery := r.URL.Query().Get("search")
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		limit = l
+	}
+
+	offsetStr := r.URL.Query().Get("offset")
+	offset := 0
+	if off, err := strconv.Atoi(offsetStr); err == nil && off >= 0 {
+		offset = off
+	}
+
+	logs, total, err := h.loginRepo.GetSecurityLogs(statusFilter, searchQuery, limit, offset)
+	if err != nil {
+		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"logs":   logs,
+			"total":  total,
+			"limit":  limit,
+			"offset": offset,
+		},
+	})
+}
+
+// GetSecurityStats handles GET /api/admin/security/stats
+func (h *AdminHandler) GetSecurityStats(w http.ResponseWriter, r *http.Request) {
+	clientIP := extractClientIP(r)
+	location := extractLocation(r, clientIP)
+	deviceInfo := parseDeviceInfo(r.UserAgent())
+
+	currentSession := &models.AdminLoginLog{
+		Username:   h.cfg.AdminUsername,
+		IPAddress:  clientIP,
+		Location:   location,
+		DeviceInfo: deviceInfo,
+		Status:     "SUCCESS",
+		LoginAt:    time.Now(),
+	}
+
+	if h.loginRepo == nil {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data": &models.SecurityStats{
+				TotalSuccess:   1,
+				TotalFailed:    0,
+				CurrentSession: currentSession,
+			},
+		})
+		return
+	}
+
+	stats, err := h.loginRepo.GetSecurityStats()
+	if err != nil {
+		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	stats.CurrentSession = currentSession
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    stats,
 	})
 }
 
