@@ -47,14 +47,36 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS product_overrides (
 			product_slug TEXT PRIMARY KEY,
 			custom_name TEXT DEFAULT '',
+			custom_type TEXT DEFAULT '',
+			custom_region TEXT DEFAULT '',
+			custom_warranty TEXT DEFAULT '',
+			custom_stock INTEGER NOT NULL DEFAULT -1,
 			custom_price_idr INTEGER DEFAULT 0,
 			promo_price_idr INTEGER DEFAULT 0,
 			custom_description TEXT DEFAULT '',
 			custom_terms TEXT DEFAULT '',
 			is_active INTEGER NOT NULL DEFAULT 1,
 			is_force_out_of_stock INTEGER NOT NULL DEFAULT 0,
+			baseline_modal_idr INTEGER DEFAULT 0,
+			is_auto_suspended INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);`,
+
+		`CREATE TABLE IF NOT EXISTS cached_products (
+			slug TEXT PRIMARY KEY,
+			raw_id TEXT DEFAULT '',
+			name TEXT NOT NULL,
+			type TEXT DEFAULT '',
+			logo TEXT DEFAULT '',
+			region TEXT DEFAULT '',
+			stock INTEGER NOT NULL DEFAULT 0,
+			stock_capped INTEGER NOT NULL DEFAULT 0,
+			warranty TEXT DEFAULT '',
+			description TEXT DEFAULT '',
+			price_usd REAL NOT NULL DEFAULT 0,
+			tiers_json TEXT DEFAULT '[]',
+			last_fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
 
 		`CREATE TABLE IF NOT EXISTS admin_login_logs (
@@ -85,6 +107,10 @@ func RunMigrations(db *sql.DB) error {
 		"ALTER TABLE product_overrides ADD COLUMN baseline_modal_idr INTEGER DEFAULT 0;",
 		"ALTER TABLE product_overrides ADD COLUMN is_auto_suspended INTEGER DEFAULT 0;",
 		"ALTER TABLE product_overrides ADD COLUMN is_force_out_of_stock INTEGER DEFAULT 0;",
+		"ALTER TABLE product_overrides ADD COLUMN custom_type TEXT DEFAULT '';",
+		"ALTER TABLE product_overrides ADD COLUMN custom_region TEXT DEFAULT '';",
+		"ALTER TABLE product_overrides ADD COLUMN custom_warranty TEXT DEFAULT '';",
+		"ALTER TABLE product_overrides ADD COLUMN custom_stock INTEGER DEFAULT -1;",
 		"ALTER TABLE admin_login_logs ADD COLUMN status TEXT DEFAULT 'SUCCESS';",
 		"ALTER TABLE admin_login_logs ADD COLUMN failure_reason TEXT DEFAULT '';",
 	}

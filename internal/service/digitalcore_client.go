@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"storeku/internal/config"
+	"storeku/internal/database"
 	"storeku/internal/models"
 	"storeku/internal/repository"
 )
@@ -24,6 +25,7 @@ type DigitalCoreClient struct {
 	httpClient   *http.Client
 	pricing      *PricingService
 	overrideRepo *repository.ProductOverrideRepository
+	db           *database.DB
 	cacheMu      sync.RWMutex
 	cachedProds  []*models.Product
 	cacheExpires time.Time
@@ -38,6 +40,11 @@ func NewDigitalCoreClient(cfg *config.Config, pricing *PricingService, overrideR
 		pricing:      pricing,
 		overrideRepo: overrideRepo,
 	}
+}
+
+// SetDB attaches the database connection for persistent catalog caching
+func (c *DigitalCoreClient) SetDB(db *database.DB) {
+	c.db = db
 }
 
 // DigitalCoreRawProduct matches the structure returned by DigitalCore /api/public/products
@@ -84,12 +91,144 @@ func toSlug(name string) string {
 // fallbackCachedOrError returns last cached products if available, or the error if empty
 func (c *DigitalCoreClient) fallbackCachedOrError(err error) ([]*models.Product, error) {
 	c.cacheMu.RLock()
-	defer c.cacheMu.RUnlock()
 	if len(c.cachedProds) > 0 {
-		log.Printf("[DIGITALCORE FALLBACK] Upstream micro-outage: %v. Serving last cached catalog (%d products).", err, len(c.cachedProds))
-		return c.cachedProds, nil
+		cached := c.cachedProds
+		c.cacheMu.RUnlock()
+		log.Printf("[DIGITALCORE FALLBACK] Upstream micro-outage: %v. Serving last cached catalog (%d products).", err, len(cached))
+		return cached, nil
 	}
+	c.cacheMu.RUnlock()
+
+	// Fallback to SQLite DB table cached_products
+	if c.db != nil {
+		if dbProds, dbErr := c.loadProductsFromDB(); dbErr == nil && len(dbProds) > 0 {
+			log.Printf("[DIGITALCORE FALLBACK] Upstream micro-outage: %v. Serving persistent DB cached catalog (%d products).", err, len(dbProds))
+			c.cacheMu.Lock()
+			c.cachedProds = dbProds
+			c.cacheExpires = time.Now().Add(45 * time.Second)
+			c.cacheMu.Unlock()
+			return dbProds, nil
+		}
+	}
+
 	return nil, err
+}
+
+func (c *DigitalCoreClient) saveProductsToDB(rawProds []DigitalCoreRawProduct) {
+	if c.db == nil {
+		return
+	}
+	query := `
+		INSERT INTO cached_products (
+			slug, raw_id, name, type, logo, region, stock, stock_capped, warranty, description, price_usd, tiers_json, last_fetched_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(slug) DO UPDATE SET
+			raw_id = excluded.raw_id,
+			name = excluded.name,
+			type = excluded.type,
+			logo = excluded.logo,
+			region = excluded.region,
+			stock = excluded.stock,
+			stock_capped = excluded.stock_capped,
+			warranty = excluded.warranty,
+			description = excluded.description,
+			price_usd = excluded.price_usd,
+			tiers_json = excluded.tiers_json,
+			last_fetched_at = CURRENT_TIMESTAMP
+	`
+	for _, p := range rawProds {
+		slug := toSlug(p.Name)
+		tiersBytes, _ := json.Marshal(p.Tiers)
+		rawIDStr := fmt.Sprintf("%v", p.ID)
+		stockCappedInt := 0
+		if p.StockCapped {
+			stockCappedInt = 1
+		}
+		var logoURL string
+		if p.Logo != "" {
+			if strings.HasPrefix(p.Logo, "http") {
+				logoURL = p.Logo
+			} else {
+				logoURL = fmt.Sprintf("%s%s", strings.TrimRight(c.cfg.DigitalCoreBaseURL, "/"), p.Logo)
+			}
+		}
+		_, _ = c.db.Exec(query, slug, rawIDStr, p.Name, p.Type, logoURL, p.Region, p.Stock, stockCappedInt, p.Warranty, p.Desc, p.PriceFrom, string(tiersBytes))
+	}
+}
+
+func (c *DigitalCoreClient) loadProductsFromDB() ([]*models.Product, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	query := `
+		SELECT slug, raw_id, name, type, logo, region, stock, stock_capped, warranty, description, price_usd, tiers_json
+		FROM cached_products
+		ORDER BY slug ASC
+	`
+	rows, err := c.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var products []*models.Product
+	for rows.Next() {
+		var slug, rawID, name, prodType, logo, region, warranty, desc, tiersJSON string
+		var stock, stockCapped int
+		var priceUSD float64
+		if err := rows.Scan(&slug, &rawID, &name, &prodType, &logo, &region, &stock, &stockCapped, &warranty, &desc, &priceUSD, &tiersJSON); err != nil {
+			continue
+		}
+		var rawTiers []struct {
+			MinQty int     `json:"minQty"`
+			MaxQty *int    `json:"maxQty"`
+			Price  float64 `json:"price"`
+		}
+		_ = json.Unmarshal([]byte(tiersJSON), &rawTiers)
+		var tiers []models.ProductTier
+		for _, t := range rawTiers {
+			var priceIDR int64
+			if c.pricing != nil {
+				priceIDR = c.pricing.ConvertUSDToIDR(t.Price)
+			}
+			tiers = append(tiers, models.ProductTier{
+				MinQty:   t.MinQty,
+				MaxQty:   t.MaxQty,
+				PriceUSD: t.Price,
+				PriceIDR: priceIDR,
+			})
+		}
+		baseUSD := priceUSD
+		if len(tiers) > 0 && tiers[0].PriceUSD > 0 {
+			baseUSD = tiers[0].PriceUSD
+		}
+		var sellIDR, modalIDR int64
+		if c.pricing != nil {
+			sellIDR = c.pricing.ConvertUSDToIDR(baseUSD)
+			modalIDR = int64(math.Round(baseUSD * c.pricing.GetUSDRate()))
+		}
+		products = append(products, &models.Product{
+			RawID:             rawID,
+			Slug:              slug,
+			Name:              name,
+			Type:              prodType,
+			Logo:              logo,
+			Region:            region,
+			Stock:             stock,
+			StockCapped:       stockCapped == 1,
+			Warranty:          warranty,
+			Description:       desc,
+			Terms:             "Membeli berarti setuju",
+			PriceUSD:          baseUSD,
+			ModalIDR:          modalIDR,
+			PriceIDR:          sellIDR,
+			ReferencePriceIDR: sellIDR,
+			Tiers:             tiers,
+			IsActive:          true,
+			IsCustomized:      false,
+		})
+	}
+	return products, nil
 }
 
 // FetchRawProducts fetches all active products directly from DigitalCore and computes baseline IDR
@@ -196,6 +335,9 @@ func (c *DigitalCoreClient) FetchRawProducts() ([]*models.Product, error) {
 	c.cacheExpires = time.Now().Add(45 * time.Second)
 	c.cacheMu.Unlock()
 
+	// 4. Persist into SQLite DB table cached_products
+	c.saveProductsToDB(rawProds)
+
 	return products, nil
 }
 
@@ -237,14 +379,29 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 				continue
 			}
 
-			// Force Out of Stock override: product still appears in catalog, but stock is 0 and flagged
+			// Stock Override
+			p.CustomStock = ov.CustomStock
 			if ov.IsForceOutOfStock {
 				p.IsForceOutOfStock = true
 				p.Stock = 0
+			} else if ov.CustomStock >= 0 {
+				p.Stock = ov.CustomStock
 			}
 
 			if ov.CustomName != "" {
 				p.Name = ov.CustomName
+			}
+			if ov.CustomType != "" {
+				p.CustomType = ov.CustomType
+				p.Type = ov.CustomType
+			}
+			if ov.CustomRegion != "" {
+				p.CustomRegion = ov.CustomRegion
+				p.Region = ov.CustomRegion
+			}
+			if ov.CustomWarranty != "" {
+				p.CustomWarranty = ov.CustomWarranty
+				p.Warranty = ov.CustomWarranty
 			}
 
 			// Baseline modal tracking & surge evaluation
@@ -371,34 +528,43 @@ func (c *DigitalCoreClient) FetchAdminProducts() ([]*models.AdminProductItem, er
 		envPriceIDR := c.pricing.ConvertUSDToIDR(p.PriceUSD)
 
 		item := &models.AdminProductItem{
-			Slug:                p.Slug,
-			OriginalName:        p.Name,
-			Name:                p.Name,
-			Type:                p.Type,
-			Logo:                p.Logo,
-			Region:              p.Region,
-			Stock:               p.Stock,
-			Warranty:            p.Warranty,
-			OriginalPriceUSD:    p.PriceUSD,
-			ModalIDR:            modalIDR,
-			EnvPriceIDR:         envPriceIDR,
-			CalculatedPriceIDR:  envPriceIDR,
-			CustomPriceIDR:      0,
-			ReferencePriceIDR:   envPriceIDR,
-			PromoPriceIDR:       0,
-			PriceIDR:            envPriceIDR,
-			HasPromo:            false,
-			DiscountPercent:     0,
-			OriginalDescription: p.Description,
-			CustomDescription:   "",
-			Description:         p.Description,
-			CustomTerms:         "",
-			Terms:               "Membeli berarti setuju",
-			IsActive:            true,
-			IsForceOutOfStock:   false,
+			Slug:                 p.Slug,
+			OriginalName:         p.Name,
+			CustomName:           "",
+			Name:                 p.Name,
+			OriginalType:         p.Type,
+			CustomType:           "",
+			Type:                 p.Type,
+			Logo:                 p.Logo,
+			OriginalRegion:       p.Region,
+			CustomRegion:         "",
+			Region:               p.Region,
+			OriginalStock:        p.Stock,
+			CustomStock:          -1,
+			Stock:                p.Stock,
+			OriginalWarranty:     p.Warranty,
+			CustomWarranty:       "",
+			Warranty:             p.Warranty,
+			OriginalPriceUSD:     p.PriceUSD,
+			ModalIDR:             modalIDR,
+			EnvPriceIDR:          envPriceIDR,
+			CalculatedPriceIDR:   envPriceIDR,
+			CustomPriceIDR:       0,
+			ReferencePriceIDR:    envPriceIDR,
+			PromoPriceIDR:        0,
+			PriceIDR:             envPriceIDR,
+			HasPromo:             false,
+			DiscountPercent:      0,
+			OriginalDescription:  p.Description,
+			CustomDescription:    "",
+			Description:          p.Description,
+			CustomTerms:          "",
+			Terms:                "Membeli berarti setuju",
+			IsActive:             true,
+			IsForceOutOfStock:    false,
 			IsOriginalOutOfStock: (p.Stock <= 0),
-			IsCustomized:        false,
-			Tiers:               p.Tiers,
+			IsCustomized:         false,
+			Tiers:                p.Tiers,
 		}
 
 		maxSurgeDisablePct := c.pricing.GetMaxSurgeDisablePercent()
@@ -410,6 +576,24 @@ func (c *DigitalCoreClient) FetchAdminProducts() ([]*models.AdminProductItem, er
 			item.CustomName = ov.CustomName
 			if ov.CustomName != "" {
 				item.Name = ov.CustomName
+			}
+			item.CustomType = ov.CustomType
+			if ov.CustomType != "" {
+				item.Type = ov.CustomType
+			}
+			item.CustomRegion = ov.CustomRegion
+			if ov.CustomRegion != "" {
+				item.Region = ov.CustomRegion
+			}
+			item.CustomWarranty = ov.CustomWarranty
+			if ov.CustomWarranty != "" {
+				item.Warranty = ov.CustomWarranty
+			}
+			item.CustomStock = ov.CustomStock
+			if ov.IsForceOutOfStock {
+				item.Stock = 0
+			} else if ov.CustomStock >= 0 {
+				item.Stock = ov.CustomStock
 			}
 			item.CustomPriceIDR = ov.CustomPriceIDR
 

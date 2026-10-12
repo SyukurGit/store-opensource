@@ -20,7 +20,8 @@ func NewProductOverrideRepository(db *database.DB) *ProductOverrideRepository {
 // GetAll returns all product overrides mapped by product_slug
 func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride, error) {
 	query := `
-		SELECT product_slug, custom_name, custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
+		SELECT product_slug, custom_name, COALESCE(custom_type, ''), COALESCE(custom_region, ''), COALESCE(custom_warranty, ''), COALESCE(custom_stock, -1),
+		       custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
 		FROM product_overrides
 	`
 	rows, err := r.db.Query(query)
@@ -36,6 +37,10 @@ func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride
 		err := rows.Scan(
 			&o.ProductSlug,
 			&o.CustomName,
+			&o.CustomType,
+			&o.CustomRegion,
+			&o.CustomWarranty,
+			&o.CustomStock,
 			&o.CustomPriceIDR,
 			&o.PromoPriceIDR,
 			&o.CustomDescription,
@@ -62,7 +67,8 @@ func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride
 // GetBySlug retrieves an override for a single product slug
 func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverride, error) {
 	query := `
-		SELECT product_slug, custom_name, custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
+		SELECT product_slug, custom_name, COALESCE(custom_type, ''), COALESCE(custom_region, ''), COALESCE(custom_warranty, ''), COALESCE(custom_stock, -1),
+		       custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
 		FROM product_overrides
 		WHERE product_slug = ?
 		LIMIT 1
@@ -72,6 +78,10 @@ func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverr
 	err := r.db.QueryRow(query, slug).Scan(
 		&o.ProductSlug,
 		&o.CustomName,
+		&o.CustomType,
+		&o.CustomRegion,
+		&o.CustomWarranty,
+		&o.CustomStock,
 		&o.CustomPriceIDR,
 		&o.PromoPriceIDR,
 		&o.CustomDescription,
@@ -98,10 +108,17 @@ func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverr
 // Upsert saves or updates a product override
 func (r *ProductOverrideRepository) Upsert(o *models.ProductOverride) error {
 	query := `
-		INSERT INTO product_overrides (product_slug, custom_name, custom_price_idr, promo_price_idr, custom_description, custom_terms, is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		INSERT INTO product_overrides (
+			product_slug, custom_name, custom_type, custom_region, custom_warranty, custom_stock,
+			custom_price_idr, promo_price_idr, custom_description, custom_terms,
+			is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		ON CONFLICT(product_slug) DO UPDATE SET
 			custom_name = excluded.custom_name,
+			custom_type = excluded.custom_type,
+			custom_region = excluded.custom_region,
+			custom_warranty = excluded.custom_warranty,
+			custom_stock = excluded.custom_stock,
 			custom_price_idr = excluded.custom_price_idr,
 			promo_price_idr = excluded.promo_price_idr,
 			custom_description = excluded.custom_description,
@@ -128,6 +145,10 @@ func (r *ProductOverrideRepository) Upsert(o *models.ProductOverride) error {
 	_, err := r.db.Exec(query,
 		o.ProductSlug,
 		o.CustomName,
+		o.CustomType,
+		o.CustomRegion,
+		o.CustomWarranty,
+		o.CustomStock,
 		o.CustomPriceIDR,
 		o.PromoPriceIDR,
 		o.CustomDescription,

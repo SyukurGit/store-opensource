@@ -408,6 +408,10 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 	override := &models.ProductOverride{
 		ProductSlug:       slug,
 		CustomName:        req.CustomName,
+		CustomType:        req.CustomType,
+		CustomRegion:      req.CustomRegion,
+		CustomWarranty:    req.CustomWarranty,
+		CustomStock:       req.CustomStock,
 		CustomPriceIDR:    req.CustomPriceIDR,
 		PromoPriceIDR:     req.PromoPriceIDR,
 		CustomDescription: req.CustomDescription,

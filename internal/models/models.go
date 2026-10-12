@@ -49,11 +49,15 @@ type Product struct {
 	Slug              string        `json:"slug"`
 	Name              string        `json:"name"`
 	Type              string        `json:"type"`
+	CustomType        string        `json:"customType,omitempty"`
 	Logo              string        `json:"logo"`
 	Region            string        `json:"region"`
+	CustomRegion      string        `json:"customRegion,omitempty"`
 	Stock             int           `json:"stock"`
+	CustomStock       int           `json:"customStock"`
 	StockCapped       bool          `json:"stockCapped"`
 	Warranty          string        `json:"warranty"`
+	CustomWarranty    string        `json:"customWarranty,omitempty"`
 	Description       string        `json:"description"`
 	Terms             string        `json:"terms"`
 	PriceUSD          float64       `json:"priceUSD"`
@@ -76,6 +80,10 @@ type Product struct {
 type ProductOverride struct {
 	ProductSlug       string    `json:"product_slug"`
 	CustomName        string    `json:"custom_name"`
+	CustomType        string    `json:"custom_type"`
+	CustomRegion      string    `json:"custom_region"`
+	CustomWarranty    string    `json:"custom_warranty"`
+	CustomStock       int       `json:"custom_stock"`
 	CustomPriceIDR    int64     `json:"custom_price_idr"`
 	PromoPriceIDR     int64     `json:"promo_price_idr"`
 	CustomDescription string    `json:"custom_description"`
@@ -91,6 +99,10 @@ type ProductOverride struct {
 // ProductOverrideRequest payload for updating per-product settings
 type ProductOverrideRequest struct {
 	CustomName        string `json:"custom_name"`
+	CustomType        string `json:"custom_type"`
+	CustomRegion      string `json:"custom_region"`
+	CustomWarranty    string `json:"custom_warranty"`
+	CustomStock       int    `json:"custom_stock"`
 	CustomPriceIDR    int64  `json:"custom_price_idr"`
 	PromoPriceIDR     int64  `json:"promo_price_idr"`
 	CustomDescription string `json:"custom_description"`
@@ -101,38 +113,46 @@ type ProductOverrideRequest struct {
 
 // AdminProductItem provides rich details for the admin products management table
 type AdminProductItem struct {
-	Slug                string        `json:"slug"`
-	OriginalName        string        `json:"original_name"`
-	CustomName          string        `json:"custom_name"`
-	Name                string        `json:"name"`
-	Type                string        `json:"type"`
-	Logo                string        `json:"logo"`
-	Region              string        `json:"region"`
-	Stock               int           `json:"stock"`
-	Warranty            string        `json:"warranty"`
-	OriginalPriceUSD    float64       `json:"original_price_usd"`
-	ModalIDR            int64         `json:"modal_idr"`
-	EnvPriceIDR         int64         `json:"env_price_idr"`
-	CalculatedPriceIDR  int64         `json:"calculated_price_idr"`
-	CustomPriceIDR      int64         `json:"custom_price_idr"`
-	ReferencePriceIDR   int64         `json:"reference_price_idr"`
-	PromoPriceIDR       int64         `json:"promo_price_idr"`
-	PriceIDR            int64         `json:"price_idr"`
-	HasPromo            bool          `json:"has_promo"`
-	DiscountPercent     int           `json:"discount_percent"`
-	OriginalDescription string        `json:"original_description"`
-	CustomDescription   string        `json:"custom_description"`
-	Description         string        `json:"description"`
-	CustomTerms         string        `json:"custom_terms"`
-	Terms               string        `json:"terms"`
-	IsActive            bool          `json:"is_active"`
-	IsForceOutOfStock   bool          `json:"is_force_out_of_stock"`
-	IsOriginalOutOfStock bool         `json:"is_original_out_of_stock"`
-	IsCustomized        bool          `json:"is_customized"`
-	BaselineModalIDR    int64         `json:"baseline_modal_idr"`
-	IsAutoSuspended     bool          `json:"is_auto_suspended"`
-	SurgePercent        float64       `json:"surge_percent"`
-	Tiers               []ProductTier `json:"tiers"`
+	Slug                 string        `json:"slug"`
+	OriginalName         string        `json:"original_name"`
+	CustomName           string        `json:"custom_name"`
+	Name                 string        `json:"name"`
+	OriginalType         string        `json:"original_type"`
+	CustomType           string        `json:"custom_type"`
+	Type                 string        `json:"type"`
+	Logo                 string        `json:"logo"`
+	OriginalRegion       string        `json:"original_region"`
+	CustomRegion         string        `json:"custom_region"`
+	Region               string        `json:"region"`
+	OriginalStock        int           `json:"original_stock"`
+	CustomStock          int           `json:"custom_stock"`
+	Stock                int           `json:"stock"`
+	OriginalWarranty     string        `json:"original_warranty"`
+	CustomWarranty       string        `json:"custom_warranty"`
+	Warranty             string        `json:"warranty"`
+	OriginalPriceUSD     float64       `json:"original_price_usd"`
+	ModalIDR             int64         `json:"modal_idr"`
+	EnvPriceIDR          int64         `json:"env_price_idr"`
+	CalculatedPriceIDR   int64         `json:"calculated_price_idr"`
+	CustomPriceIDR       int64         `json:"custom_price_idr"`
+	ReferencePriceIDR    int64         `json:"reference_price_idr"`
+	PromoPriceIDR        int64         `json:"promo_price_idr"`
+	PriceIDR             int64         `json:"price_idr"`
+	HasPromo             bool          `json:"has_promo"`
+	DiscountPercent      int           `json:"discount_percent"`
+	OriginalDescription  string        `json:"original_description"`
+	CustomDescription    string        `json:"custom_description"`
+	Description          string        `json:"description"`
+	CustomTerms          string        `json:"custom_terms"`
+	Terms                string        `json:"terms"`
+	IsActive             bool          `json:"is_active"`
+	IsForceOutOfStock    bool          `json:"is_force_out_of_stock"`
+	IsOriginalOutOfStock bool          `json:"is_original_out_of_stock"`
+	IsCustomized         bool          `json:"is_customized"`
+	BaselineModalIDR     int64         `json:"baseline_modal_idr"`
+	IsAutoSuspended      bool          `json:"is_auto_suspended"`
+	SurgePercent         float64       `json:"surge_percent"`
+	Tiers                []ProductTier `json:"tiers"`
 }
 
 // CheckoutRequest payload from buyer

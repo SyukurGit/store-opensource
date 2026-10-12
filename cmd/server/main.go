@@ -39,6 +39,7 @@ func main() {
 	// 4. Initialize Services
 	pricingService := service.NewPricingService(cfg, settingRepo)
 	dcClient := service.NewDigitalCoreClient(cfg, pricingService, overrideRepo)
+	dcClient.SetDB(db)
 	pgClient := service.NewPaymentGClient(cfg)
 	resendService := service.NewResendService(cfg)
 	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
