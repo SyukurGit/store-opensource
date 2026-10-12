@@ -16,13 +16,14 @@ import (
 )
 
 type OrderService struct {
-	orderRepo      *repository.OrderRepository
-	pricing        *PricingService
-	dcClient       *DigitalCoreClient
-	pgClient       *PaymentGClient
-	resendService  *ResendService
-	voucherService *VoucherService
-	locks          sync.Map // invoice string -> *sync.Mutex
+	orderRepo        *repository.OrderRepository
+	pricing          *PricingService
+	dcClient         *DigitalCoreClient
+	pgClient         *PaymentGClient
+	resendService    *ResendService
+	voucherService   *VoucherService
+	localProductRepo *repository.LocalProductRepository
+	locks            sync.Map // invoice string -> *sync.Mutex
 }
 
 func NewOrderService(
@@ -43,6 +44,10 @@ func NewOrderService(
 
 func (s *OrderService) SetVoucherService(vs *VoucherService) {
 	s.voucherService = vs
+}
+
+func (s *OrderService) SetLocalProductRepo(lpr *repository.LocalProductRepository) {
+	s.localProductRepo = lpr
 }
 
 func (s *OrderService) getInvoiceLock(invoice string) *sync.Mutex {
@@ -75,16 +80,24 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	}
 
 	// 1. Fetch live product catalog to ensure valid stock and real-time pricing
-	products, err := s.dcClient.FetchProducts()
-	if err != nil {
-		return nil, fmt.Errorf("gagal memuat katalog produk: %w", err)
+	var targetProduct *models.Product
+	if s.localProductRepo != nil {
+		if lp, err := s.localProductRepo.GetBySlug(req.ProductSlug); err == nil && lp != nil && lp.IsActive {
+			targetProduct = lp.ToProduct()
+		}
 	}
 
-	var targetProduct *models.Product
-	for _, p := range products {
-		if p.Slug == req.ProductSlug {
-			targetProduct = p
-			break
+	if targetProduct == nil {
+		products, err := s.dcClient.FetchProducts()
+		if err != nil {
+			return nil, fmt.Errorf("gagal memuat katalog produk: %w", err)
+		}
+
+		for _, p := range products {
+			if p.Slug == req.ProductSlug {
+				targetProduct = p
+				break
+			}
 		}
 	}
 
@@ -100,26 +113,33 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		return nil, fmt.Errorf("stok tidak mencukupi (sisa: %d)", targetProduct.Stock)
 	}
 
-	// 2. Determine price (custom price override takes precedence if configured)
-	unitPriceUSD := targetProduct.PriceUSD
-	for _, tier := range targetProduct.Tiers {
-		if req.Quantity >= tier.MinQty && (tier.MaxQty == nil || req.Quantity <= *tier.MaxQty) {
-			unitPriceUSD = tier.PriceUSD
-			break
-		}
-	}
-
+	// 2. Determine price
+	var unitPriceUSD float64
 	var unitPriceIDR int64
-	if targetProduct.IsCustomized && targetProduct.PriceIDR > 0 {
+
+	if targetProduct.Source == "LOCAL" {
+		unitPriceUSD = 0
 		unitPriceIDR = targetProduct.PriceIDR
 	} else {
-		unitPriceIDR = s.pricing.ConvertUSDToIDR(unitPriceUSD)
-	}
+		unitPriceUSD = targetProduct.PriceUSD
+		for _, tier := range targetProduct.Tiers {
+			if req.Quantity >= tier.MinQty && (tier.MaxQty == nil || req.Quantity <= *tier.MaxQty) {
+				unitPriceUSD = tier.PriceUSD
+				break
+			}
+		}
 
-	// Golden rule safety check: unitPriceIDR must never be less than minSafePrice (modal + margin)
-	minSafePrice := s.pricing.ConvertUSDToIDR(unitPriceUSD)
-	if unitPriceIDR < minSafePrice {
-		unitPriceIDR = minSafePrice
+		if targetProduct.IsCustomized && targetProduct.PriceIDR > 0 {
+			unitPriceIDR = targetProduct.PriceIDR
+		} else {
+			unitPriceIDR = s.pricing.ConvertUSDToIDR(unitPriceUSD)
+		}
+
+		// Golden rule safety check: unitPriceIDR must never be less than minSafePrice (modal + margin)
+		minSafePrice := s.pricing.ConvertUSDToIDR(unitPriceUSD)
+		if unitPriceIDR < minSafePrice {
+			unitPriceIDR = minSafePrice
+		}
 	}
 
 	subtotalIDR := unitPriceIDR * int64(req.Quantity)
@@ -278,6 +298,10 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 		res.IsQuotaOut = true
 		res.QuotaOutMessage = "Mohon maaf, kuota/stok produk saat ini telah habis terjual. Dana pembayaran Anda aman, untuk proses pengembalian dana (refund) 100% silakan hubungi CS via Telegram."
 		res.DeliveredItems = []string{}
+	} else if order.FulfillmentStatus == "PENDING_MANUAL_DELIVERY" {
+		res.IsQuotaOut = true
+		res.QuotaOutMessage = "Pembayaran Anda telah LUNAS! Lisensi pesanan ini sedang disiapkan manual oleh admin. Silakan hubungi Customer Service kami via Telegram untuk serah terima akun."
+		res.DeliveredItems = []string{}
 	} else if order.FulfillmentStatus == "HOLD_INSUFFICIENT_BOT_BALANCE" || order.FulfillmentStatus == "FAILED" {
 		res.IsQuotaOut = true
 		res.QuotaOutMessage = "Mohon maaf, terjadi kendala antrean pemenuhan stok otomatis dari penyedia server. Dana pembayaran Anda aman 100%. Silakan hubungi Customer Service via Telegram untuk penanganan kilat atau refund."
@@ -366,6 +390,28 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 					log.Printf("[RESEND ERROR] Gagal mengirim email ke %s: %v", toEmail, err)
 				}
 			}(order.CustomerEmail, order.InvoiceNumber, order.ClaimCode, order.TotalAmount, order.ProductName, order.Quantity)
+		}
+	}
+
+	// LOCAL PRODUCT FULFILLMENT: Check if product is from local database
+	if s.localProductRepo != nil {
+		if lp, err := s.localProductRepo.GetBySlug(order.ProductSlug); err == nil && lp != nil {
+			log.Printf("[LOCAL FULFILLMENT] Processing local product %s for order %s (Qty: %d)...", lp.Slug, invoice, order.Quantity)
+			claimedKeys, claimErr := s.localProductRepo.ClaimKeys(lp.Slug, order.Quantity)
+			if claimErr != nil {
+				log.Printf("[LOCAL FULFILLMENT ERROR] Error claiming keys for %s: %v", invoice, claimErr)
+			}
+
+			if len(claimedKeys) > 0 {
+				itemsJSON, _ := json.Marshal(claimedKeys)
+				_ = s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", "LOCAL-ORDER", "", string(itemsJSON), 0)
+				log.Printf("[LOCAL FULFILLMENT SUCCESS] Order %s fulfilled with %d key(s).", invoice, len(claimedKeys))
+			} else {
+				// Keys are empty. User requested: "Jika key kosong juga tidak apa-apa. Nanti user akan hubungi gue."
+				_ = s.orderRepo.UpdateFulfillment(invoice, "PENDING_MANUAL_DELIVERY", "Stok serial key sedang disiapkan oleh admin. Hubungi Telegram CS kami di @Digimestsupport untuk penyerahan akun.", "", "", "[]")
+				log.Printf("[LOCAL FULFILLMENT PENDING] Order %s marked PENDING_MANUAL_DELIVERY (empty keys).", invoice)
+			}
+			return nil
 		}
 	}
 
@@ -489,6 +535,47 @@ func (s *OrderService) MarkRefundedOrder(invoice string) error {
 	return s.orderRepo.UpdateFulfillment(invoice, "REFUNDED", "Refund dana telah diselesaikan oleh admin", "", "", "[]")
 }
 
+// ManualDeliverKeys allows admin to manually deliver serial keys for an order
+func (s *OrderService) ManualDeliverKeys(invoice string, keys []string) error {
+	lock := s.getInvoiceLock(invoice)
+	lock.Lock()
+	defer lock.Unlock()
+
+	order, err := s.orderRepo.GetOrderByInvoice(invoice)
+	if err != nil {
+		return fmt.Errorf("pesanan '%s' tidak ditemukan", invoice)
+	}
+
+	if order.PaymentStatus != "PAID" {
+		return fmt.Errorf("pesanan belum berstatus PAID")
+	}
+
+	var cleanKeys []string
+	for _, k := range keys {
+		trimmed := strings.TrimSpace(k)
+		if trimmed != "" {
+			cleanKeys = append(cleanKeys, trimmed)
+		}
+	}
+	if len(cleanKeys) == 0 {
+		return fmt.Errorf("minimal 1 serial key wajib diisi")
+	}
+
+	itemsJSON, _ := json.Marshal(cleanKeys)
+	if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", "MANUAL-DELIVERY", "", string(itemsJSON), 0); err != nil {
+		return fmt.Errorf("gagal memperbarui status pengiriman: %w", err)
+	}
+
+	// Trigger email update
+	if s.resendService != nil && order.CustomerEmail != "" {
+		go func(toEmail, inv, claim string, total int64, prod string, qty int) {
+			_ = s.resendService.SendClaimEmail(toEmail, inv, claim, total, prod, qty)
+		}(order.CustomerEmail, order.InvoiceNumber, order.ClaimCode, order.TotalAmount, order.ProductName, order.Quantity)
+	}
+
+	return nil
+}
+
 // ClaimProduct finds license keys by claim code or invoice number
 func (s *OrderService) ClaimProduct(query string) (*models.ClaimResponse, error) {
 	query = strings.TrimSpace(query)
@@ -525,6 +612,10 @@ func (s *OrderService) ClaimProduct(query string) (*models.ClaimResponse, error)
 	if order.FulfillmentStatus == "HOLD_PRICE_SPIKE" {
 		isQuotaOut = true
 		quotaOutMsg = "Mohon maaf, kuota/stok produk saat ini telah habis terjual. Dana pembayaran Anda aman, untuk proses pengembalian dana (refund) 100% silakan hubungi CS via Telegram."
+		items = []string{}
+	} else if order.FulfillmentStatus == "PENDING_MANUAL_DELIVERY" {
+		isQuotaOut = true
+		quotaOutMsg = "Pembayaran Anda telah LUNAS! Lisensi pesanan ini sedang disiapkan manual oleh admin. Silakan klik tombol di bawah untuk serah terima akun kilat dengan CS kami via Telegram."
 		items = []string{}
 	} else if order.FulfillmentStatus == "HOLD_INSUFFICIENT_BOT_BALANCE" || order.FulfillmentStatus == "FAILED" {
 		isQuotaOut = true

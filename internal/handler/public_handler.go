@@ -17,13 +17,14 @@ import (
 )
 
 type PublicHandler struct {
-	cfg            *config.Config
-	dcClient       *service.DigitalCoreClient
-	orderService   *service.OrderService
-	settingRepo    *repository.SettingRepository
-	voucherService *service.VoucherService
-	lastCheckTimes map[string]time.Time
-	checkMu        sync.Mutex
+	cfg              *config.Config
+	dcClient         *service.DigitalCoreClient
+	orderService     *service.OrderService
+	settingRepo      *repository.SettingRepository
+	localProductRepo *repository.LocalProductRepository
+	voucherService   *service.VoucherService
+	lastCheckTimes   map[string]time.Time
+	checkMu          sync.Mutex
 }
 
 func NewPublicHandler(cfg *config.Config, dcClient *service.DigitalCoreClient, orderService *service.OrderService, settingRepo *repository.SettingRepository) *PublicHandler {
@@ -38,6 +39,10 @@ func NewPublicHandler(cfg *config.Config, dcClient *service.DigitalCoreClient, o
 
 func (h *PublicHandler) SetVoucherService(vs *service.VoucherService) {
 	h.voucherService = vs
+}
+
+func (h *PublicHandler) SetLocalProductRepo(repo *repository.LocalProductRepository) {
+	h.localProductRepo = repo
 }
 
 // HealthCheck handles GET /health and GET /api/health
@@ -72,18 +77,66 @@ func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 
 // GetProducts handles GET /api/products
 func (h *PublicHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
-	products, err := h.dcClient.FetchProducts()
-	if err != nil {
-		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
-			"success": false,
-			"error":   "Gagal memuat katalog produk dari upstream: " + err.Error(),
+	var localProducts []*models.Product
+	if h.localProductRepo != nil {
+		if lps, err := h.localProductRepo.GetAllActive(); err == nil {
+			for _, lp := range lps {
+				localProducts = append(localProducts, lp.ToProduct())
+			}
+		}
+	}
+
+	dcEnabled := true
+	if h.settingRepo != nil {
+		dcEnabled = h.settingRepo.Get("digitalcore_enabled", "true") == "true"
+	}
+
+	// If DigitalCore upstream sync is turned OFF, return only local products immediately
+	if !dcEnabled {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    localProducts,
 		})
 		return
 	}
 
+	// If DigitalCore is ON, fetch upstream concurrently with a strict 3.5-second timeout
+	type dcResult struct {
+		products []*models.Product
+		err      error
+	}
+	ch := make(chan dcResult, 1)
+	go func() {
+		p, err := h.dcClient.FetchProducts()
+		ch <- dcResult{products: p, err: err}
+	}()
+
+	var dcProducts []*models.Product
+	select {
+	case res := <-ch:
+		if res.err == nil {
+			dcProducts = res.products
+		}
+	case <-time.After(3500 * time.Millisecond):
+		// Upstream micro-outage or timeout: gracefully continue with local products only
+	}
+
+	// Merge catalog: local products have precedence and shadow any duplicate slug from upstream
+	slugSet := make(map[string]bool)
+	var merged []*models.Product
+	for _, lp := range localProducts {
+		slugSet[lp.Slug] = true
+		merged = append(merged, lp)
+	}
+	for _, dp := range dcProducts {
+		if !slugSet[dp.Slug] {
+			merged = append(merged, dp)
+		}
+	}
+
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"data":    products,
+		"data":    merged,
 	})
 }
 
@@ -98,6 +151,40 @@ func (h *PublicHandler) GetProductDetail(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// 1. Check local products first
+	if h.localProductRepo != nil {
+		if lp, err := h.localProductRepo.GetBySlug(slug); err == nil && lp != nil && lp.IsActive {
+			sendJSON(w, http.StatusOK, map[string]interface{}{
+				"success": true,
+				"data":    lp.ToProduct(),
+			})
+			return
+		}
+		if unescaped, uerr := url.PathUnescape(slug); uerr == nil && unescaped != slug {
+			if lp, err := h.localProductRepo.GetBySlug(unescaped); err == nil && lp != nil && lp.IsActive {
+				sendJSON(w, http.StatusOK, map[string]interface{}{
+					"success": true,
+					"data":    lp.ToProduct(),
+				})
+				return
+			}
+		}
+	}
+
+	// 2. Check if DigitalCore is enabled
+	dcEnabled := true
+	if h.settingRepo != nil {
+		dcEnabled = h.settingRepo.Get("digitalcore_enabled", "true") == "true"
+	}
+	if !dcEnabled {
+		sendJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"error":   "Produk tidak ditemukan atau tidak aktif",
+		})
+		return
+	}
+
+	// 3. Fallback to DigitalCore catalog
 	product, err := h.dcClient.GetPublicProductBySlug(slug)
 	if err != nil {
 		if unescaped, uerr := url.PathUnescape(slug); uerr == nil && unescaped != slug {

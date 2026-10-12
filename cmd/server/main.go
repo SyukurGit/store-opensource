@@ -37,6 +37,7 @@ func main() {
 	adminLoginRepo := repository.NewAdminLoginRepository(db)
 	voucherRepo := repository.NewVoucherRepository(db)
 	maintenanceRepo := repository.NewMaintenanceRepository(db)
+	localProductRepo := repository.NewLocalProductRepository(db)
 
 	// 4. Initialize Services
 	pricingService := service.NewPricingService(cfg, settingRepo)
@@ -47,14 +48,17 @@ func main() {
 	voucherService := service.NewVoucherService(cfg, voucherRepo)
 	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
 	orderService.SetVoucherService(voucherService)
+	orderService.SetLocalProductRepo(localProductRepo)
 
 	// 5. Initialize Handlers
 	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService, settingRepo)
 	publicHandler.SetVoucherService(voucherService)
+	publicHandler.SetLocalProductRepo(localProductRepo)
 	webhookHandler := handler.NewWebhookHandler(orderService, pgClient, orderRepo)
 	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, adminLoginRepo, dcClient, orderService)
 	adminHandler.SetVoucherService(voucherService)
 	adminHandler.SetMaintenanceRepo(maintenanceRepo)
+	adminHandler.SetLocalProductRepo(localProductRepo)
 
 	// Background Sweeper: auto-expire orders that passed their 15-minute deadline
 	go func() {
@@ -124,6 +128,15 @@ func main() {
 			r.Post("/admin/settings", adminHandler.SaveSettings)
 			r.Get("/admin/maintenance/stats", adminHandler.GetDatabaseStats)
 			r.Post("/admin/maintenance/clean", adminHandler.CleanDatabase)
+
+			// Local Products Management
+			r.Get("/admin/custom-products", adminHandler.ListLocalProducts)
+			r.Get("/admin/custom-products/{id}", adminHandler.GetLocalProduct)
+			r.Post("/admin/custom-products", adminHandler.CreateLocalProduct)
+			r.Put("/admin/custom-products/{id}", adminHandler.UpdateLocalProduct)
+			r.Post("/admin/custom-products/{id}", adminHandler.UpdateLocalProduct)
+			r.Delete("/admin/custom-products/{id}", adminHandler.DeleteLocalProduct)
+			r.Post("/admin/orders/{invoice}/manual-deliver-keys", adminHandler.ManualDeliverKeys)
 		})
 	})
 
@@ -152,11 +165,12 @@ func main() {
 		"/terms.html":          "/terms",
 		"/admin/index.html":    "/admin",
 		"/admin/login.html":    "/admin/login",
-		"/admin/products.html": "/admin/products",
-		"/admin/orders.html":   "/admin/orders",
-		"/admin/vouchers.html": "/admin/vouchers",
-		"/admin/security.html": "/admin/security",
-		"/admin/settings.html": "/admin/settings",
+		"/admin/products.html":        "/admin/products",
+		"/admin/custom-products.html": "/admin/custom-products",
+		"/admin/orders.html":          "/admin/orders",
+		"/admin/vouchers.html":        "/admin/vouchers",
+		"/admin/security.html":        "/admin/security",
+		"/admin/settings.html":        "/admin/settings",
 	}
 	for oldPath, newPath := range cleanRedirects {
 		target := newPath
@@ -222,6 +236,9 @@ func main() {
 	})
 	r.Get("/admin/products", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "products.html"))
+	})
+	r.Get("/admin/custom-products", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "custom-products.html"))
 	})
 	r.Get("/admin/orders", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "orders.html"))

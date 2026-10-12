@@ -105,6 +105,29 @@ func RunMigrations(db *sql.DB) error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
+
+		`CREATE TABLE IF NOT EXISTS local_products (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			slug TEXT UNIQUE NOT NULL,
+			name TEXT NOT NULL,
+			type TEXT DEFAULT 'Digital License',
+			logo TEXT DEFAULT '',
+			region TEXT DEFAULT 'Global',
+			warranty TEXT DEFAULT 'Full Garansi',
+			description TEXT DEFAULT '',
+			terms TEXT DEFAULT 'Membeli berarti setuju dengan syarat & ketentuan',
+			price_idr INTEGER NOT NULL DEFAULT 0,
+			reference_price_idr INTEGER NOT NULL DEFAULT 0,
+			promo_price_idr INTEGER NOT NULL DEFAULT 0,
+			has_promo INTEGER NOT NULL DEFAULT 0,
+			discount_percent INTEGER NOT NULL DEFAULT 0,
+			stock INTEGER NOT NULL DEFAULT 0,
+			stock_keys TEXT NOT NULL DEFAULT '[]',
+			is_active INTEGER NOT NULL DEFAULT 1,
+			is_force_out_of_stock INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);`,
 	}
 
 	for _, q := range tableQueries {
@@ -148,6 +171,8 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_admin_login_ip ON admin_login_logs(ip_address);`,
 		`CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);`,
 		`CREATE INDEX IF NOT EXISTS idx_vouchers_active ON vouchers(is_active);`,
+		`CREATE INDEX IF NOT EXISTS idx_local_products_slug ON local_products(slug);`,
+		`CREATE INDEX IF NOT EXISTS idx_local_products_active ON local_products(is_active);`,
 	}
 
 	for _, idxQ := range indexQueries {

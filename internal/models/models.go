@@ -76,6 +76,89 @@ type Product struct {
 	BaselineModalIDR  int64         `json:"baselineModalIDR"`
 	IsAutoSuspended   bool          `json:"isAutoSuspended"`
 	SurgePercent      float64       `json:"surgePercent"`
+	Source            string        `json:"source,omitempty"` // "LOCAL" or "DIGITALCORE"
+}
+
+// LocalProduct represents a standalone product managed directly in the local database
+type LocalProduct struct {
+	ID                int64     `json:"id"`
+	Slug              string    `json:"slug"`
+	Name              string    `json:"name"`
+	Type              string    `json:"type"`
+	Logo              string    `json:"logo"`
+	Region            string    `json:"region"`
+	Warranty          string    `json:"warranty"`
+	Description       string    `json:"description"`
+	Terms             string    `json:"terms"`
+	PriceIDR          int64     `json:"price_idr"`
+	ReferencePriceIDR int64     `json:"reference_price_idr"`
+	PromoPriceIDR     int64     `json:"promo_price_idr"`
+	HasPromo          bool      `json:"has_promo"`
+	DiscountPercent   int       `json:"discount_percent"`
+	Stock             int       `json:"stock"`
+	StockKeys         []string  `json:"stock_keys"` // In memory slice; stored as JSON text in DB
+	IsActive          bool      `json:"is_active"`
+	IsForceOutOfStock bool      `json:"is_force_out_of_stock"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+func (lp *LocalProduct) ToProduct() *Product {
+	sellPrice := lp.PriceIDR
+	refPrice := lp.ReferencePriceIDR
+	if refPrice <= 0 {
+		refPrice = lp.PriceIDR
+	}
+	if lp.HasPromo && lp.PromoPriceIDR > 0 {
+		sellPrice = lp.PromoPriceIDR
+	}
+
+	discPct := lp.DiscountPercent
+	if discPct <= 0 && lp.HasPromo && refPrice > sellPrice {
+		discPct = int(float64(refPrice-sellPrice) / float64(refPrice) * 100.0)
+	}
+
+	return &Product{
+		Slug:              lp.Slug,
+		Name:              lp.Name,
+		Type:              lp.Type,
+		Logo:              lp.Logo,
+		Region:            lp.Region,
+		Warranty:          lp.Warranty,
+		Description:       lp.Description,
+		Terms:             lp.Terms,
+		PriceUSD:          0,
+		ModalIDR:          0,
+		PriceIDR:          sellPrice,
+		ReferencePriceIDR: refPrice,
+		PromoPriceIDR:     lp.PromoPriceIDR,
+		HasPromo:          lp.HasPromo,
+		DiscountPercent:   discPct,
+		Stock:             lp.Stock,
+		IsActive:          lp.IsActive,
+		IsForceOutOfStock: lp.IsForceOutOfStock,
+		IsCustomized:      true,
+		Source:            "LOCAL",
+	}
+}
+
+// LocalProductRequest represents the payload for creating or updating a local product
+type LocalProductRequest struct {
+	Slug              string   `json:"slug"`
+	Name              string   `json:"name"`
+	Type              string   `json:"type"`
+	Logo              string   `json:"logo"`
+	Region            string   `json:"region"`
+	Warranty          string   `json:"warranty"`
+	Description       string   `json:"description"`
+	Terms             string   `json:"terms"`
+	PriceIDR          int64    `json:"price_idr"`
+	ReferencePriceIDR int64    `json:"reference_price_idr"`
+	PromoPriceIDR     int64    `json:"promo_price_idr"`
+	HasPromo          bool     `json:"has_promo"`
+	StockKeys         []string `json:"stock_keys"` // Up to 10 keys
+	IsActive          bool     `json:"is_active"`
+	IsForceOutOfStock bool     `json:"is_force_out_of_stock"`
 }
 
 // ProductOverride represents stored admin custom settings for a product

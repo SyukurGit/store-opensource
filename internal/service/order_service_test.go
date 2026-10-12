@@ -598,3 +598,146 @@ func TestClaimCodeHiddenUntilPaid(t *testing.T) {
 	}
 }
 
+func TestLocalProductOrderFulfillmentAndManualDeliver(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("failed to init test db: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	orderRepo := repository.NewOrderRepository(db)
+	settingRepo := repository.NewSettingRepository(db)
+	overrideRepo := repository.NewProductOverrideRepository(db)
+	localProdRepo := repository.NewLocalProductRepository(db)
+	cfg := &config.Config{ProfitMarginPercent: 25.0, USDToIDRRate: 18000.0}
+	pricing := NewPricingService(cfg, settingRepo)
+	dcClient := NewDigitalCoreClient(cfg, pricing, overrideRepo)
+	pgClient := NewPaymentGClient(cfg)
+	resend := NewResendService(cfg)
+
+	svc := NewOrderService(orderRepo, pricing, dcClient, pgClient, resend)
+	svc.SetLocalProductRepo(localProdRepo)
+
+	// 1. Create a local product with 2 keys
+	pWithKeys, err := localProdRepo.Create(&models.LocalProductRequest{
+		Name:      "Local Canva Pro",
+		Slug:      "local-canva-pro",
+		PriceIDR:  35000,
+		IsActive:  true,
+		StockKeys: []string{"KEY-CANVA-1", "KEY-CANVA-2"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create local product: %v", err)
+	}
+
+	// 2. Create local product with 0 keys (manual CS delivery)
+	pNoKeys, err := localProdRepo.Create(&models.LocalProductRequest{
+		Name:      "Local Netflix 0 Keys",
+		Slug:      "local-netflix-0",
+		PriceIDR:  45000,
+		IsActive:  true,
+		StockKeys: []string{},
+	})
+	if err != nil {
+		t.Fatalf("failed to create local product 0 keys: %v", err)
+	}
+
+	// Scenario A: Order for pWithKeys -> auto fulfilled
+	exp := time.Now().Add(15 * time.Minute)
+	orderA := &models.Order{
+		InvoiceNumber:     "INV-LOCAL-001",
+		ClaimCode:         "CLM-LOCAL-001",
+		ProductSlug:       pWithKeys.Slug,
+		ProductName:       pWithKeys.Name,
+		Quantity:          1,
+		TotalAmount:       35000,
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := orderRepo.CreateOrder(orderA); err != nil {
+		t.Fatalf("failed to create orderA: %v", err)
+	}
+
+	// Process payment success
+	if err := svc.ProcessPaymentSuccess("INV-LOCAL-001", "TRX-LOCAL-001"); err != nil {
+		t.Fatalf("ProcessPaymentSuccess failed: %v", err)
+	}
+
+	updatedA, err := orderRepo.GetOrderByInvoice("INV-LOCAL-001")
+	if err != nil {
+		t.Fatalf("failed to get orderA: %v", err)
+	}
+	if updatedA.PaymentStatus != "PAID" {
+		t.Errorf("expected PAID, got %s", updatedA.PaymentStatus)
+	}
+	if updatedA.FulfillmentStatus != "SUCCESS" {
+		t.Errorf("expected SUCCESS, got %s", updatedA.FulfillmentStatus)
+	}
+	var deliveredKeysA []string
+	_ = json.Unmarshal([]byte(updatedA.DeliveredItems), &deliveredKeysA)
+	if len(deliveredKeysA) != 1 || deliveredKeysA[0] != "KEY-CANVA-1" {
+		t.Errorf("expected KEY-CANVA-1 delivered, got %v", deliveredKeysA)
+	}
+
+	// Sisa key harus 1
+	pAfterA, _ := localProdRepo.GetByID(pWithKeys.ID)
+	if len(pAfterA.StockKeys) != 1 || pAfterA.StockKeys[0] != "KEY-CANVA-2" {
+		t.Errorf("expected 1 key remaining (KEY-CANVA-2), got %v", pAfterA.StockKeys)
+	}
+
+	// Scenario B: Order for pNoKeys -> PENDING_MANUAL_DELIVERY
+	orderB := &models.Order{
+		InvoiceNumber:     "INV-LOCAL-002",
+		ClaimCode:         "CLM-LOCAL-002",
+		ProductSlug:       pNoKeys.Slug,
+		ProductName:       pNoKeys.Name,
+		Quantity:          1,
+		TotalAmount:       45000,
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := orderRepo.CreateOrder(orderB); err != nil {
+		t.Fatalf("failed to create orderB: %v", err)
+	}
+
+	if err := svc.ProcessPaymentSuccess("INV-LOCAL-002", "TRX-LOCAL-002"); err != nil {
+		t.Fatalf("ProcessPaymentSuccess failed for orderB: %v", err)
+	}
+
+	updatedB, err := orderRepo.GetOrderByInvoice("INV-LOCAL-002")
+	if err != nil {
+		t.Fatalf("failed to get orderB: %v", err)
+	}
+	if updatedB.PaymentStatus != "PAID" {
+		t.Errorf("expected PAID for orderB, got %s", updatedB.PaymentStatus)
+	}
+	if updatedB.FulfillmentStatus != "PENDING_MANUAL_DELIVERY" {
+		t.Errorf("expected PENDING_MANUAL_DELIVERY for orderB, got %s", updatedB.FulfillmentStatus)
+	}
+
+	// Now Admin delivers keys manually
+	manualKeys := []string{"MANUAL-KEY-NETFLIX-999"}
+	if err := svc.ManualDeliverKeys("INV-LOCAL-002", manualKeys); err != nil {
+		t.Fatalf("ManualDeliverKeys failed: %v", err)
+	}
+
+	fulfilledB, err := orderRepo.GetOrderByInvoice("INV-LOCAL-002")
+	if err != nil {
+		t.Fatalf("failed to get fulfilledB: %v", err)
+	}
+	if fulfilledB.FulfillmentStatus != "SUCCESS" {
+		t.Errorf("expected SUCCESS after manual deliver, got %s", fulfilledB.FulfillmentStatus)
+	}
+	var deliveredKeysB []string
+	_ = json.Unmarshal([]byte(fulfilledB.DeliveredItems), &deliveredKeysB)
+	if len(deliveredKeysB) != 1 || deliveredKeysB[0] != "MANUAL-KEY-NETFLIX-999" {
+		t.Errorf("expected MANUAL-KEY-NETFLIX-999 delivered, got %v", deliveredKeysB)
+	}
+}
+
