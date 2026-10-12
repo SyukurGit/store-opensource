@@ -28,12 +28,12 @@ func (r *OrderRepository) CreateOrder(o *models.Order) error {
 			invoice_number, claim_code, product_slug, product_name, product_type,
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
-			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, expires_at, created_at, updated_at
+			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, voucher_code, discount_idr, expires_at, created_at, updated_at
 		) VALUES (
 			?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+			?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 		)
 	`
 	res, err := r.db.Exec(
@@ -41,7 +41,7 @@ func (r *OrderRepository) CreateOrder(o *models.Order) error {
 		o.InvoiceNumber, o.ClaimCode, o.ProductSlug, o.ProductName, o.ProductType,
 		o.Quantity, o.BasePriceUSD, o.SellPriceIDR, o.OriginalAmount, o.UniqueCode,
 		o.TotalAmount, o.GatewayOrderID, o.QRURL, o.PaymentStatus, o.FulfillmentStatus,
-		o.WarrantyInfo, o.CustomerContact, o.CustomerEmail, o.CostAtCheckoutUSD, o.ExpiresAt,
+		o.WarrantyInfo, o.CustomerContact, o.CustomerEmail, o.CostAtCheckoutUSD, o.VoucherCode, o.DiscountIDR, o.ExpiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert order: %w", err)
@@ -62,7 +62,7 @@ func (r *OrderRepository) GetOrderByInvoice(invoice string) (*models.Order, erro
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
 			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
-			paid_at, expires_at, created_at, updated_at
+			voucher_code, discount_idr, paid_at, expires_at, created_at, updated_at
 		FROM orders WHERE invoice_number = ?
 	`
 	row := r.db.QueryRow(query, invoice)
@@ -77,7 +77,7 @@ func (r *OrderRepository) GetOrderByClaimCode(claimCode string) (*models.Order, 
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
 			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
-			paid_at, expires_at, created_at, updated_at
+			voucher_code, discount_idr, paid_at, expires_at, created_at, updated_at
 		FROM orders WHERE claim_code = ?
 	`
 	row := r.db.QueryRow(query, claimCode)
@@ -92,7 +92,7 @@ func (r *OrderRepository) GetOrderByGatewayOrderID(gwID string) (*models.Order, 
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
 			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
-			paid_at, expires_at, created_at, updated_at
+			voucher_code, discount_idr, paid_at, expires_at, created_at, updated_at
 		FROM orders WHERE gateway_order_id = ?
 	`
 	row := r.db.QueryRow(query, gwID)
@@ -163,7 +163,7 @@ func (r *OrderRepository) ListOrders(limit, offset int, statusFilter string) ([]
 			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
 			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
-			paid_at, expires_at, created_at, updated_at
+			voucher_code, discount_idr, paid_at, expires_at, created_at, updated_at
 		FROM orders
 	`
 
@@ -240,7 +240,7 @@ func scanOrder(row *sql.Row) (*models.Order, error) {
 		&o.TotalAmount, &o.GatewayOrderID, &o.QRURL, &o.PaymentStatus, &o.FulfillmentStatus,
 		&o.FulfillmentError, &o.DigitalCoreOrderID, &o.DigitalCoreViewURL, &o.DeliveredItems,
 		&o.WarrantyInfo, &o.CustomerContact, &o.CustomerEmail, &o.CostAtCheckoutUSD, &o.CostAtFulfillmentUSD,
-		&o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
+		&o.VoucherCode, &o.DiscountIDR, &o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -256,7 +256,7 @@ func scanOrderRows(rows *sql.Rows) (*models.Order, error) {
 		&o.TotalAmount, &o.GatewayOrderID, &o.QRURL, &o.PaymentStatus, &o.FulfillmentStatus,
 		&o.FulfillmentError, &o.DigitalCoreOrderID, &o.DigitalCoreViewURL, &o.DeliveredItems,
 		&o.WarrantyInfo, &o.CustomerContact, &o.CustomerEmail, &o.CostAtCheckoutUSD, &o.CostAtFulfillmentUSD,
-		&o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
+		&o.VoucherCode, &o.DiscountIDR, &o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

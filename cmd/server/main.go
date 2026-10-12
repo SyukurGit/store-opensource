@@ -35,6 +35,7 @@ func main() {
 	orderRepo := repository.NewOrderRepository(db)
 	overrideRepo := repository.NewProductOverrideRepository(db)
 	adminLoginRepo := repository.NewAdminLoginRepository(db)
+	voucherRepo := repository.NewVoucherRepository(db)
 
 	// 4. Initialize Services
 	pricingService := service.NewPricingService(cfg, settingRepo)
@@ -42,12 +43,16 @@ func main() {
 	dcClient.SetDB(db)
 	pgClient := service.NewPaymentGClient(cfg)
 	resendService := service.NewResendService(cfg)
+	voucherService := service.NewVoucherService(cfg, voucherRepo)
 	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
+	orderService.SetVoucherService(voucherService)
 
 	// 5. Initialize Handlers
 	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService, settingRepo)
+	publicHandler.SetVoucherService(voucherService)
 	webhookHandler := handler.NewWebhookHandler(orderService, pgClient, orderRepo)
 	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, adminLoginRepo, dcClient, orderService)
+	adminHandler.SetVoucherService(voucherService)
 
 	// Background Sweeper: auto-expire orders that passed their 15-minute deadline
 	go func() {
@@ -79,6 +84,7 @@ func main() {
 		r.Get("/products", publicHandler.GetProducts)
 		r.Get("/products/{slug}", publicHandler.GetProductDetail)
 		r.Post("/checkout", publicHandler.CreateCheckout)
+		r.Post("/vouchers/validate", publicHandler.ValidateVoucher)
 		r.Get("/orders/{invoice}/status", publicHandler.GetOrderStatus)
 		r.Post("/orders/{invoice}/check", publicHandler.TriggerCheck)
 		r.Post("/orders/{invoice}/cancel", publicHandler.CancelOrder)
@@ -108,6 +114,10 @@ func main() {
 			r.Post("/admin/orders/{invoice}/force-fulfill", adminHandler.ForceFulfill)
 			r.Post("/admin/orders/{invoice}/manual-paid-fulfill", adminHandler.ManualPaidAndFulfill)
 			r.Post("/admin/orders/{invoice}/mark-refunded", adminHandler.MarkRefunded)
+			r.Get("/admin/vouchers", adminHandler.ListVouchers)
+			r.Post("/admin/vouchers", adminHandler.CreateVoucher)
+			r.Post("/admin/vouchers/{id}/toggle", adminHandler.ToggleVoucher)
+			r.Delete("/admin/vouchers/{id}", adminHandler.DeleteVoucher)
 			r.Get("/admin/settings", adminHandler.GetSettings)
 			r.Post("/admin/settings", adminHandler.SaveSettings)
 		})
@@ -140,6 +150,7 @@ func main() {
 		"/admin/login.html":    "/admin/login",
 		"/admin/products.html": "/admin/products",
 		"/admin/orders.html":   "/admin/orders",
+		"/admin/vouchers.html": "/admin/vouchers",
 		"/admin/security.html": "/admin/security",
 		"/admin/settings.html": "/admin/settings",
 	}
@@ -210,6 +221,9 @@ func main() {
 	})
 	r.Get("/admin/orders", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "orders.html"))
+	})
+	r.Get("/admin/vouchers", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "vouchers.html"))
 	})
 	r.Get("/admin/security", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "security.html"))

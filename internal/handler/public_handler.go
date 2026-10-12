@@ -21,6 +21,7 @@ type PublicHandler struct {
 	dcClient       *service.DigitalCoreClient
 	orderService   *service.OrderService
 	settingRepo    *repository.SettingRepository
+	voucherService *service.VoucherService
 	lastCheckTimes map[string]time.Time
 	checkMu        sync.Mutex
 }
@@ -33,6 +34,10 @@ func NewPublicHandler(cfg *config.Config, dcClient *service.DigitalCoreClient, o
 		settingRepo:    settingRepo,
 		lastCheckTimes: make(map[string]time.Time),
 	}
+}
+
+func (h *PublicHandler) SetVoucherService(vs *service.VoucherService) {
+	h.voucherService = vs
 }
 
 // HealthCheck handles GET /health and GET /api/health
@@ -276,6 +281,96 @@ func (h *PublicHandler) ClaimProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendJSON(w, http.StatusOK, res)
+}
+
+// ValidateVoucher handles POST /api/vouchers/validate
+func (h *PublicHandler) ValidateVoucher(w http.ResponseWriter, r *http.Request) {
+	if h.voucherService == nil {
+		sendJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"success": false,
+			"error":   "Layanan voucher tidak tersedia",
+		})
+		return
+	}
+
+	// Rate limiting by client IP
+	clientIP := extractClientIP(r)
+	if err := h.voucherService.CheckRateLimit(clientIP); err != nil {
+		sendJSON(w, http.StatusTooManyRequests, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var req models.ValidateVoucherRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Format request tidak valid",
+		})
+		return
+	}
+
+	if req.Quantity < 1 {
+		req.Quantity = 1
+	}
+
+	// Calculate product subtotal to validate voucher rules against
+	products, err := h.dcClient.FetchProducts()
+	if err != nil {
+		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   "Gagal memuat informasi produk",
+		})
+		return
+	}
+
+	var targetProduct *models.Product
+	for _, p := range products {
+		if p.Slug == req.ProductSlug {
+			targetProduct = p
+			break
+		}
+	}
+
+	if targetProduct == nil {
+		sendJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"error":   "Produk tidak ditemukan",
+		})
+		return
+	}
+
+	unitPriceIDR := targetProduct.PriceIDR
+	subtotalIDR := unitPriceIDR * int64(req.Quantity)
+
+	v, discountIDR, err := h.voucherService.ValidateForCheckout(req.Code, subtotalIDR)
+	if err != nil {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	finalSubtotal := subtotalIDR - discountIDR
+	if finalSubtotal < 1000 {
+		finalSubtotal = 1000
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data": models.ValidateVoucherResponse{
+			Valid:             true,
+			Code:              v.Code,
+			DiscountIDR:       discountIDR,
+			DiscountFormatted: fmt.Sprintf("Rp %d", discountIDR),
+			SubtotalOriginal:  subtotalIDR,
+			SubtotalFinal:     finalSubtotal,
+			Message:           fmt.Sprintf("Voucher hemat Rp %d berhasil diterapkan!", discountIDR),
+		},
+	})
 }
 
 func sendJSON(w http.ResponseWriter, statusCode int, data interface{}) {

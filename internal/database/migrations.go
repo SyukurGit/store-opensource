@@ -90,6 +90,21 @@ func RunMigrations(db *sql.DB) error {
 			failure_reason TEXT DEFAULT '',
 			login_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
+
+		`CREATE TABLE IF NOT EXISTS vouchers (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			code TEXT UNIQUE NOT NULL,
+			discount_idr INTEGER NOT NULL DEFAULT 0,
+			min_spend_idr INTEGER NOT NULL DEFAULT 0,
+			max_usage INTEGER NOT NULL DEFAULT 1,
+			used_count INTEGER NOT NULL DEFAULT 0,
+			expires_at DATETIME,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			signature TEXT NOT NULL DEFAULT '',
+			note TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);`,
 	}
 
 	for _, q := range tableQueries {
@@ -103,6 +118,8 @@ func RunMigrations(db *sql.DB) error {
 		"ALTER TABLE orders ADD COLUMN customer_email TEXT DEFAULT '';",
 		"ALTER TABLE orders ADD COLUMN cost_at_checkout_usd REAL DEFAULT 0;",
 		"ALTER TABLE orders ADD COLUMN cost_at_fulfillment_usd REAL DEFAULT 0;",
+		"ALTER TABLE orders ADD COLUMN voucher_code TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN discount_idr INTEGER DEFAULT 0;",
 		"ALTER TABLE product_overrides ADD COLUMN promo_price_idr INTEGER DEFAULT 0;",
 		"ALTER TABLE product_overrides ADD COLUMN baseline_modal_idr INTEGER DEFAULT 0;",
 		"ALTER TABLE product_overrides ADD COLUMN is_auto_suspended INTEGER DEFAULT 0;",
@@ -129,6 +146,8 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_admin_login_at ON admin_login_logs(login_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_admin_login_status ON admin_login_logs(status);`,
 		`CREATE INDEX IF NOT EXISTS idx_admin_login_ip ON admin_login_logs(ip_address);`,
+		`CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);`,
+		`CREATE INDEX IF NOT EXISTS idx_vouchers_active ON vouchers(is_active);`,
 	}
 
 	for _, idxQ := range indexQueries {

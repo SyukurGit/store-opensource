@@ -25,6 +25,7 @@ type Config struct {
 	StoreBaseURL            string
 	TelegramSupportUsername string
 	AllowedOrigins          string
+	VoucherSecretKey        string
 }
 
 func LoadConfig() *Config {
@@ -49,6 +50,7 @@ func LoadConfig() *Config {
 		StoreBaseURL:            getEnv("STORE_BASE_URL", "https://digimest.tech"),
 		TelegramSupportUsername: getEnv("TELEGRAM_SUPPORT_USERNAME", "Digimestsupport"),
 		AllowedOrigins:          getEnv("ALLOWED_ORIGINS", "https://digimest.tech,https://*.pages.dev,http://localhost:8080,http://127.0.0.1:8080"),
+		VoucherSecretKey:        getEnv("VOUCHER_SECRET_KEY", "voucher_sig_salt_default_key"),
 	}
 
 	return cfg

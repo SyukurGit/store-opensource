@@ -16,12 +16,13 @@ import (
 )
 
 type OrderService struct {
-	orderRepo     *repository.OrderRepository
-	pricing       *PricingService
-	dcClient      *DigitalCoreClient
-	pgClient      *PaymentGClient
-	resendService *ResendService
-	locks         sync.Map // invoice string -> *sync.Mutex
+	orderRepo      *repository.OrderRepository
+	pricing        *PricingService
+	dcClient       *DigitalCoreClient
+	pgClient       *PaymentGClient
+	resendService  *ResendService
+	voucherService *VoucherService
+	locks          sync.Map // invoice string -> *sync.Mutex
 }
 
 func NewOrderService(
@@ -38,6 +39,10 @@ func NewOrderService(
 		pgClient:      pgClient,
 		resendService: resendService,
 	}
+}
+
+func (s *OrderService) SetVoucherService(vs *VoucherService) {
+	s.voucherService = vs
 }
 
 func (s *OrderService) getInvoiceLock(invoice string) *sync.Mutex {
@@ -119,6 +124,34 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 
 	subtotalIDR := unitPriceIDR * int64(req.Quantity)
 
+	// 2b. Apply voucher discount if supplied
+	var appliedVoucherCode string
+	var discountIDR int64
+	var voucherClaimed bool
+
+	if strings.TrimSpace(req.VoucherCode) != "" && s.voucherService != nil {
+		cleanCode := strings.ToUpper(strings.TrimSpace(req.VoucherCode))
+		v, disc, errVal := s.voucherService.ValidateForCheckout(cleanCode, subtotalIDR)
+		if errVal != nil {
+			return nil, fmt.Errorf("voucher tidak dapat digunakan: %w", errVal)
+		}
+
+		// Atomically claim 1 quota
+		_, errConsume := s.voucherService.ConsumeVoucherAtomic(cleanCode)
+		if errConsume != nil {
+			return nil, fmt.Errorf("gagal mengklaim kuota voucher: %w", errConsume)
+		}
+		voucherClaimed = true
+		appliedVoucherCode = v.Code
+		discountIDR = disc
+
+		// Apply discount with min Rp 1,000 threshold for ShopeePay QRIS
+		subtotalIDR = subtotalIDR - discountIDR
+		if subtotalIDR < 1000 {
+			subtotalIDR = 1000
+		}
+	}
+
 	// 3. Generate unique Invoice Number and Claim Code
 	datePrefix := time.Now().Format("20060102")
 	invoiceNumber := fmt.Sprintf("INV-%s-%s", datePrefix, generateRandomString(6))
@@ -128,6 +161,10 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	metadata := fmt.Sprintf("Digimest: %s (Qty: %d)", targetProduct.Name, req.Quantity)
 	pgOrder, err := s.pgClient.CreateQRISOrder(invoiceNumber, subtotalIDR, metadata)
 	if err != nil {
+		// Revert voucher usage only if network gateway failure prevented QRIS generation entirely
+		if voucherClaimed && s.voucherService != nil {
+			_ = s.voucherService.RevertVoucherUsage(appliedVoucherCode)
+		}
 		return nil, fmt.Errorf("gagal membuat tagihan QRIS PaymentG: %w", err)
 	}
 
@@ -156,6 +193,8 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		OriginalAmount:    pgOrder.OriginalAmount,
 		UniqueCode:        pgOrder.UniqueCode,
 		TotalAmount:       pgOrder.TotalAmount,
+		VoucherCode:       appliedVoucherCode,
+		DiscountIDR:       discountIDR,
 		GatewayOrderID:    pgOrder.OrderID,
 		QRURL:             pgOrder.QRURL,
 		PaymentStatus:     "PENDING",
@@ -179,6 +218,8 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		OriginalAmount:   pgOrder.OriginalAmount,
 		UniqueCode:       pgOrder.UniqueCode,
 		TotalAmount:      pgOrder.TotalAmount,
+		VoucherCode:      appliedVoucherCode,
+		DiscountIDR:      discountIDR,
 		GatewayOrderID:   pgOrder.OrderID,
 		QRURL:            pgOrder.QRURL,
 		ExpiresAt:        expiresAtTime.Format(time.RFC3339),

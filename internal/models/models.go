@@ -29,6 +29,8 @@ type Order struct {
 	CustomerEmail       string     `json:"customer_email"`
 	CostAtCheckoutUSD   float64    `json:"cost_at_checkout_usd"`
 	CostAtFulfillmentUSD float64   `json:"cost_at_fulfillment_usd"`
+	VoucherCode         string     `json:"voucher_code,omitempty"`
+	DiscountIDR         int64      `json:"discount_idr"`
 	PaidAt              *time.Time `json:"paid_at"`
 	ExpiresAt           *time.Time `json:"expires_at"`
 	CreatedAt           time.Time  `json:"created_at"`
@@ -161,6 +163,7 @@ type CheckoutRequest struct {
 	Quantity        int    `json:"quantity"`
 	CustomerEmail   string `json:"customer_email"`
 	CustomerContact string `json:"customer_contact"`
+	VoucherCode     string `json:"voucher_code,omitempty"`
 }
 
 // CheckoutResponse returned to buyer
@@ -172,6 +175,8 @@ type CheckoutResponse struct {
 	OriginalAmount   int64  `json:"original_amount"`
 	UniqueCode       int    `json:"unique_code"`
 	TotalAmount      int64  `json:"total_amount"`
+	VoucherCode      string `json:"voucher_code,omitempty"`
+	DiscountIDR      int64  `json:"discount_idr,omitempty"`
 	GatewayOrderID   string `json:"gateway_order_id"`
 	QRURL            string `json:"qr_url"`
 	ExpiresAt        string `json:"expires_at"`
@@ -244,3 +249,49 @@ type DigitalCoreCheckResult struct {
 	RawResponse  string  `json:"raw_response,omitempty"`
 	Message      string  `json:"message"`
 }
+
+// Voucher represents a promo code with cryptographic signature and usage limits
+type Voucher struct {
+	ID          int64      `json:"id"`
+	Code        string     `json:"code"`
+	DiscountIDR int64      `json:"discount_idr"`
+	MinSpendIDR int64      `json:"min_spend_idr"`
+	MaxUsage    int        `json:"max_usage"`
+	UsedCount   int        `json:"used_count"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	IsActive    bool       `json:"is_active"`
+	Signature   string     `json:"signature"`
+	Note        string     `json:"note"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// CreateVoucherRequest payload for creating a new voucher in admin
+type CreateVoucherRequest struct {
+	Code          string `json:"code"`
+	DiscountIDR   int64  `json:"discount_idr"`
+	MinSpendIDR   int64  `json:"min_spend_idr"`
+	MaxUsage      int    `json:"max_usage"`
+	ExpiresAt     string `json:"expires_at,omitempty"`
+	Note          string `json:"note,omitempty"`
+	AdminPassword string `json:"admin_password"`
+}
+
+// ValidateVoucherRequest payload from frontend checkout
+type ValidateVoucherRequest struct {
+	Code        string `json:"code"`
+	ProductSlug string `json:"product_slug"`
+	Quantity    int    `json:"quantity"`
+}
+
+// ValidateVoucherResponse returned to frontend checkout
+type ValidateVoucherResponse struct {
+	Valid             bool   `json:"valid"`
+	Code              string `json:"code"`
+	DiscountIDR       int64  `json:"discount_idr"`
+	DiscountFormatted string `json:"discount_formatted"`
+	SubtotalOriginal  int64  `json:"subtotal_original"`
+	SubtotalFinal     int64  `json:"subtotal_final"`
+	Message           string `json:"message"`
+}
+
