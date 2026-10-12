@@ -212,7 +212,7 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 
 	return &models.CheckoutResponse{
 		InvoiceNumber:    invoiceNumber,
-		ClaimCode:        claimCode,
+		ClaimCode:        "", // Jangan bocorkan kode klaim sebelum lunas
 		ProductName:      targetProduct.Name,
 		Quantity:         req.Quantity,
 		OriginalAmount:   pgOrder.OriginalAmount,
@@ -245,9 +245,15 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 		_ = json.Unmarshal([]byte(order.DeliveredItems), &items)
 	}
 
+	// Hanya tampilkan Kode Klaim jika status transaksi sudah LUNAS (PAID)
+	visibleClaimCode := ""
+	if order.PaymentStatus == "PAID" {
+		visibleClaimCode = order.ClaimCode
+	}
+
 	res := &models.OrderStatusResponse{
 		InvoiceNumber:     order.InvoiceNumber,
-		ClaimCode:         order.ClaimCode,
+		ClaimCode:         visibleClaimCode,
 		ProductName:       order.ProductName,
 		ProductType:       order.ProductType,
 		Quantity:          order.Quantity,
@@ -526,10 +532,16 @@ func (s *OrderService) ClaimProduct(query string) (*models.ClaimResponse, error)
 		items = []string{}
 	}
 
+	// Jangan bocorkan kode klaim jika order belum lunas (misal dicari via invoice)
+	visibleClaimCode := ""
+	if order.PaymentStatus == "PAID" {
+		visibleClaimCode = order.ClaimCode
+	}
+
 	return &models.ClaimResponse{
 		Success:            true,
 		InvoiceNumber:      order.InvoiceNumber,
-		ClaimCode:          order.ClaimCode,
+		ClaimCode:          visibleClaimCode,
 		ProductName:        order.ProductName,
 		ProductType:        order.ProductType,
 		Quantity:           order.Quantity,

@@ -536,3 +536,65 @@ func TestDigitalCoreBuyProductPayloadAndURL(t *testing.T) {
 	}
 }
 
+func TestClaimCodeHiddenUntilPaid(t *testing.T) {
+	svc, repo := setupTestOrderService(t)
+
+	exp := time.Now().Add(15 * time.Minute)
+	pendingOrder := &models.Order{
+		InvoiceNumber:     "INV-CLAIM-TEST-001",
+		ClaimCode:         "CLM-SECRET-123",
+		ProductSlug:       "test-slug",
+		ProductName:       "Test Product",
+		Quantity:          1,
+		TotalAmount:       50000,
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := repo.CreateOrder(pendingOrder); err != nil {
+		t.Fatalf("failed to create pending order: %v", err)
+	}
+
+	// 1. Unpaid order status should NOT expose ClaimCode
+	status, err := svc.GetOrderStatus("INV-CLAIM-TEST-001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status.ClaimCode != "" {
+		t.Fatalf("expected ClaimCode to be empty for PENDING order, got: '%s'", status.ClaimCode)
+	}
+
+	// 2. Querying ClaimProduct by invoice while unpaid should NOT expose ClaimCode
+	claimRes, err := svc.ClaimProduct("INV-CLAIM-TEST-001")
+	if err != nil {
+		t.Fatalf("unexpected error from ClaimProduct: %v", err)
+	}
+	if claimRes.ClaimCode != "" {
+		t.Fatalf("expected ClaimCode to be empty from ClaimProduct for PENDING order, got: '%s'", claimRes.ClaimCode)
+	}
+
+	// 3. Update to PAID
+	now := time.Now().UTC()
+	if err := repo.UpdatePaymentStatus("INV-CLAIM-TEST-001", "PAID", &now); err != nil {
+		t.Fatalf("failed to mark paid: %v", err)
+	}
+
+	// 4. Now GetOrderStatus should reveal ClaimCode
+	paidStatus, err := svc.GetOrderStatus("INV-CLAIM-TEST-001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if paidStatus.ClaimCode != "CLM-SECRET-123" {
+		t.Fatalf("expected ClaimCode 'CLM-SECRET-123' for PAID order, got: '%s'", paidStatus.ClaimCode)
+	}
+
+	// 5. Querying ClaimProduct should now reveal ClaimCode
+	paidClaimRes, err := svc.ClaimProduct("CLM-SECRET-123")
+	if err != nil {
+		t.Fatalf("unexpected error from ClaimProduct: %v", err)
+	}
+	if paidClaimRes.ClaimCode != "CLM-SECRET-123" {
+		t.Fatalf("expected ClaimCode 'CLM-SECRET-123' from ClaimProduct, got: '%s'", paidClaimRes.ClaimCode)
+	}
+}
+
