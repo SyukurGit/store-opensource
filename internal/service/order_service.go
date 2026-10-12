@@ -549,7 +549,7 @@ func (s *OrderService) ClaimProduct(query string) (*models.ClaimResponse, error)
 		FulfillmentStatus:  order.FulfillmentStatus,
 		DeliveredItems:     items,
 		WarrantyInfo:       order.WarrantyInfo,
-		DigitalCoreViewURL: order.DigitalCoreViewURL,
+		DigitalCoreViewURL: "", // Jangan bocorkan link upstream ke pembeli, cukup di admin panel
 		CreatedAt:          order.CreatedAt.Format("02 Jan 2006, 15:04"),
 		IsQuotaOut:         isQuotaOut,
 		QuotaOutMessage:    quotaOutMsg,
