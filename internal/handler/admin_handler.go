@@ -24,8 +24,9 @@ type AdminHandler struct {
 	overrideRepo   *repository.ProductOverrideRepository
 	loginRepo      *repository.AdminLoginRepository
 	dcClient       *service.DigitalCoreClient
-	orderService   *service.OrderService
-	voucherService *service.VoucherService
+	orderService    *service.OrderService
+	voucherService  *service.VoucherService
+	maintenanceRepo *repository.MaintenanceRepository
 }
 
 func NewAdminHandler(
@@ -50,6 +51,10 @@ func NewAdminHandler(
 
 func (h *AdminHandler) SetVoucherService(vs *service.VoucherService) {
 	h.voucherService = vs
+}
+
+func (h *AdminHandler) SetMaintenanceRepo(mr *repository.MaintenanceRepository) {
+	h.maintenanceRepo = mr
 }
 
 type AdminLoginRequest struct {
@@ -881,5 +886,75 @@ func (h *AdminHandler) DeleteVoucher(w http.ResponseWriter, r *http.Request) {
 		"message": "Voucher berhasil dihapus",
 	})
 }
+
+// GetDatabaseStats handles GET /api/admin/maintenance/stats
+func (h *AdminHandler) GetDatabaseStats(w http.ResponseWriter, r *http.Request) {
+	if h.maintenanceRepo == nil {
+		sendJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"success": false,
+			"error":   "Layanan pemeliharaan database tidak tersedia",
+		})
+		return
+	}
+
+	stats, err := h.maintenanceRepo.GetStats(h.cfg.DatabasePath)
+	if err != nil {
+		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   "Gagal mengambil statistik database: " + err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    stats,
+	})
+}
+
+// CleanDatabase handles POST /api/admin/maintenance/clean
+func (h *AdminHandler) CleanDatabase(w http.ResponseWriter, r *http.Request) {
+	if h.maintenanceRepo == nil {
+		sendJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"success": false,
+			"error":   "Layanan pemeliharaan database tidak tersedia",
+		})
+		return
+	}
+
+	var req models.DatabaseCleanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Format request tidak valid: " + err.Error(),
+		})
+		return
+	}
+
+	// Secondary security verification: require admin password confirmation
+	if strings.TrimSpace(req.AdminPassword) == "" || req.AdminPassword != h.cfg.AdminPassword {
+		sendJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"error":   "Password admin konfirmasi tidak valid atau salah",
+		})
+		return
+	}
+
+	result, err := h.maintenanceRepo.CleanDatabase(h.cfg.DatabasePath, &req)
+	if err != nil {
+		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   "Gagal melakukan pembersihan database: " + err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Pembersihan database SQLite berhasil diselesaikan",
+		"data":    result,
+	})
+}
+
 
 

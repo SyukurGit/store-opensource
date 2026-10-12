@@ -295,3 +295,51 @@ type ValidateVoucherResponse struct {
 	Message           string `json:"message"`
 }
 
+// DatabaseStats holds aggregate counts and storage metrics for admin maintenance
+type DatabaseStats struct {
+	DatabaseSizeBytes        int64  `json:"database_size_bytes"`
+	DatabaseSizeFormatted    string `json:"database_size_formatted"`
+	TotalOrders              int64  `json:"total_orders"`
+	PaidOrders               int64  `json:"paid_orders"`
+	PendingOrders            int64  `json:"pending_orders"`
+	ExpiredCancelledOrders   int64  `json:"expired_cancelled_orders"`
+	OrdersOlderThan3Days     int64  `json:"orders_older_than_3_days"`
+	OrdersOlderThan7Days     int64  `json:"orders_older_than_7_days"`
+	OrdersOlderThan30Days    int64  `json:"orders_older_than_30_days"`
+	OrdersWithKeysOlder3Days int64  `json:"orders_with_keys_older_3_days"`
+	TotalLoginLogs           int64  `json:"total_login_logs"`
+	FailedLoginLogs          int64  `json:"failed_login_logs"`
+	TotalVouchers            int64  `json:"total_vouchers"`
+	ExpiredUsedVouchers      int64  `json:"expired_used_vouchers"`
+	CachedProductsCount      int64  `json:"cached_products_count"`
+}
+
+// DatabaseCleanRequest payload for selective database cleanup
+type DatabaseCleanRequest struct {
+	AdminPassword       string `json:"admin_password"`
+	CleanOrders         bool   `json:"clean_orders"`
+	OrdersMode          string `json:"orders_mode"` // "ALL", "EXPIRED_CANCELLED", "OLDER_THAN"
+	OrdersOlderDays     int    `json:"orders_older_days"`
+	CleanDeliveredKeys  bool   `json:"clean_delivered_keys"`
+	KeysOlderDays       int    `json:"keys_older_days"`
+	CleanLoginLogs      bool   `json:"clean_login_logs"`
+	LogsMode            string `json:"logs_mode"` // "ALL", "FAILED_ONLY", "OLDER_THAN_7_DAYS", "OLDER_THAN_30_DAYS"
+	CleanVouchers       bool   `json:"clean_vouchers"`
+	VouchersMode        string `json:"vouchers_mode"` // "EXPIRED_USED", "ALL"
+	CleanCachedProducts bool   `json:"clean_cached_products"`
+	RunVacuum           bool   `json:"run_vacuum"`
+}
+
+// DatabaseCleanResult summary returned after database cleanup execution
+type DatabaseCleanResult struct {
+	OrdersDeleted      int64  `json:"orders_deleted"`
+	KeysCleaned        int64  `json:"keys_cleaned"`
+	LogsDeleted        int64  `json:"logs_deleted"`
+	VouchersDeleted    int64  `json:"vouchers_deleted"`
+	CachedCleaned      int64  `json:"cached_cleaned"`
+	VacuumExecuted     bool   `json:"vacuum_executed"`
+	DatabaseSizeBefore string `json:"database_size_before"`
+	DatabaseSizeAfter  string `json:"database_size_after"`
+	Message            string `json:"message"`
+}
+

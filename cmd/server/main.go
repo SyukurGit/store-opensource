@@ -36,6 +36,7 @@ func main() {
 	overrideRepo := repository.NewProductOverrideRepository(db)
 	adminLoginRepo := repository.NewAdminLoginRepository(db)
 	voucherRepo := repository.NewVoucherRepository(db)
+	maintenanceRepo := repository.NewMaintenanceRepository(db)
 
 	// 4. Initialize Services
 	pricingService := service.NewPricingService(cfg, settingRepo)
@@ -53,6 +54,7 @@ func main() {
 	webhookHandler := handler.NewWebhookHandler(orderService, pgClient, orderRepo)
 	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, adminLoginRepo, dcClient, orderService)
 	adminHandler.SetVoucherService(voucherService)
+	adminHandler.SetMaintenanceRepo(maintenanceRepo)
 
 	// Background Sweeper: auto-expire orders that passed their 15-minute deadline
 	go func() {
@@ -120,6 +122,8 @@ func main() {
 			r.Delete("/admin/vouchers/{id}", adminHandler.DeleteVoucher)
 			r.Get("/admin/settings", adminHandler.GetSettings)
 			r.Post("/admin/settings", adminHandler.SaveSettings)
+			r.Get("/admin/maintenance/stats", adminHandler.GetDatabaseStats)
+			r.Post("/admin/maintenance/clean", adminHandler.CleanDatabase)
 		})
 	})
 
