@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -1184,13 +1185,20 @@ func (h *AdminHandler) ManualDeliverKeys(w http.ResponseWriter, r *http.Request)
 
 // UpdateProductDisplayStats handles PUT /api/admin/products/{slug}/display-stats
 func (h *AdminHandler) UpdateProductDisplayStats(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
-	if slug == "" {
+	rawSlug := chi.URLParam(r, "slug")
+	if rawSlug == "" {
 		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"error":   "Slug produk tidak boleh kosong",
 		})
 		return
+	}
+
+	slug := rawSlug
+	if unescaped, err := url.PathUnescape(rawSlug); err == nil && unescaped != "" {
+		slug = unescaped
+	} else if unescaped, err := url.QueryUnescape(rawSlug); err == nil && unescaped != "" {
+		slug = unescaped
 	}
 
 	var req models.ProductDisplayStatsRequest
@@ -1202,8 +1210,8 @@ func (h *AdminHandler) UpdateProductDisplayStats(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if req.SalesCount <= 0 {
-		req.SalesCount = 10
+	if req.SalesCount < 0 {
+		req.SalesCount = 0
 	}
 	if req.DisplayOrder < 0 {
 		req.DisplayOrder = 0
@@ -1269,6 +1277,11 @@ func (h *AdminHandler) ListReviews(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slug := strings.TrimSpace(r.URL.Query().Get("slug"))
+	if slug != "" {
+		if unescaped, uerr := url.PathUnescape(slug); uerr == nil && unescaped != "" {
+			slug = unescaped
+		}
+	}
 	var reviews []*models.ProductReview
 	var err error
 	if slug != "" {

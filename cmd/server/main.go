@@ -168,6 +168,7 @@ func main() {
 		"/product.html":        "/product",
 		"/payment.html":        "/payment",
 		"/claim.html":          "/claim",
+		"/reviews.html":        "/reviews",
 		"/about.html":          "/about",
 		"/how-to-buy.html":     "/how-to-buy",
 		"/warranty.html":       "/warranty",
@@ -206,6 +207,9 @@ func main() {
 	})
 	r.Get("/claim", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "claim.html"))
+	})
+	r.Get("/reviews", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "reviews.html"))
 	})
 	r.Get("/about", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "about.html"))
