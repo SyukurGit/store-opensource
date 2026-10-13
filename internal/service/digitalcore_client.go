@@ -47,6 +47,14 @@ func (c *DigitalCoreClient) SetDB(db *database.DB) {
 	c.db = db
 }
 
+// InvalidateCache clears the in-memory cached catalog
+func (c *DigitalCoreClient) InvalidateCache() {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	c.cachedProds = nil
+	c.cacheExpires = time.Time{}
+}
+
 // DigitalCoreRawProduct matches the structure returned by DigitalCore /api/public/products
 type DigitalCoreRawProduct struct {
 	ID          interface{} `json:"id"`
@@ -475,6 +483,12 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 			p.IsCustomized = true
 			p.BaselineModalIDR = baselineModal
 			p.SurgePercent = surgePct
+			p.DisplayOrder = ov.DisplayOrder
+			salesCount := ov.SalesCount
+			if salesCount <= 0 {
+				salesCount = 10
+			}
+			p.SalesCount = salesCount
 
 			// Clear conflicting wholesale tiers for customized products so detail page & checkout match root catalog exactly
 			p.Tiers = nil
@@ -484,6 +498,8 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 			p.PromoPriceIDR = 0
 			p.HasPromo = false
 			p.DiscountPercent = 0
+			p.DisplayOrder = 0
+			p.SalesCount = 10
 		}
 		p.IsActive = true
 		publicProducts = append(publicProducts, &p)
@@ -665,6 +681,15 @@ func (c *DigitalCoreClient) FetchAdminProducts() ([]*models.AdminProductItem, er
 			if ov.CustomTerms != "" {
 				item.Terms = ov.CustomTerms
 			}
+			item.DisplayOrder = ov.DisplayOrder
+			salesCount := ov.SalesCount
+			if salesCount <= 0 {
+				salesCount = 10
+			}
+			item.SalesCount = salesCount
+		} else {
+			item.DisplayOrder = 0
+			item.SalesCount = 10
 		}
 
 		adminItems = append(adminItems, item)

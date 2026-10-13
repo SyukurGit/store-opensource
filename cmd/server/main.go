@@ -38,6 +38,7 @@ func main() {
 	voucherRepo := repository.NewVoucherRepository(db)
 	maintenanceRepo := repository.NewMaintenanceRepository(db)
 	localProductRepo := repository.NewLocalProductRepository(db)
+	reviewRepo := repository.NewReviewRepository(db)
 
 	// 4. Initialize Services
 	pricingService := service.NewPricingService(cfg, settingRepo)
@@ -54,11 +55,13 @@ func main() {
 	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService, settingRepo)
 	publicHandler.SetVoucherService(voucherService)
 	publicHandler.SetLocalProductRepo(localProductRepo)
+	publicHandler.SetReviewRepo(reviewRepo)
 	webhookHandler := handler.NewWebhookHandler(orderService, pgClient, orderRepo)
 	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, adminLoginRepo, dcClient, orderService)
 	adminHandler.SetVoucherService(voucherService)
 	adminHandler.SetMaintenanceRepo(maintenanceRepo)
 	adminHandler.SetLocalProductRepo(localProductRepo)
+	adminHandler.SetReviewRepo(reviewRepo)
 
 	// Background Sweeper: auto-expire orders that passed their 15-minute deadline
 	go func() {
@@ -89,6 +92,8 @@ func main() {
 		r.Get("/config", publicHandler.GetAppConfig)
 		r.Get("/products", publicHandler.GetProducts)
 		r.Get("/products/{slug}", publicHandler.GetProductDetail)
+		r.Get("/products/{slug}/reviews", publicHandler.GetProductReviews)
+		r.Post("/reviews", publicHandler.SubmitReview)
 		r.Post("/checkout", publicHandler.CreateCheckout)
 		r.Post("/vouchers/validate", publicHandler.ValidateVoucher)
 		r.Get("/orders/{invoice}/status", publicHandler.GetOrderStatus)
@@ -115,6 +120,11 @@ func main() {
 			r.Get("/admin/products", adminHandler.ListProducts)
 			r.Post("/admin/products/{slug}", adminHandler.SaveProductOverride)
 			r.Post("/admin/products/{slug}/reset", adminHandler.ResetProductOverride)
+			r.Put("/admin/products/{slug}/display-stats", adminHandler.UpdateProductDisplayStats)
+			r.Get("/admin/reviews", adminHandler.ListReviews)
+			r.Post("/admin/reviews", adminHandler.CreateReview)
+			r.Put("/admin/reviews/{id}", adminHandler.UpdateReview)
+			r.Delete("/admin/reviews/{id}", adminHandler.DeleteReview)
 			r.Get("/admin/orders", adminHandler.ListOrders)
 			r.Post("/admin/retry", adminHandler.RetryFulfillment)
 			r.Post("/admin/orders/{invoice}/force-fulfill", adminHandler.ForceFulfill)
@@ -169,6 +179,7 @@ func main() {
 		"/admin/custom-products.html": "/admin/custom-products",
 		"/admin/orders.html":          "/admin/orders",
 		"/admin/vouchers.html":        "/admin/vouchers",
+		"/admin/reviews.html":         "/admin/reviews",
 		"/admin/security.html":        "/admin/security",
 		"/admin/settings.html":        "/admin/settings",
 	}
@@ -239,6 +250,9 @@ func main() {
 	})
 	r.Get("/admin/custom-products", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "custom-products.html"))
+	})
+	r.Get("/admin/reviews", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "reviews.html"))
 	})
 	r.Get("/admin/orders", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "orders.html"))

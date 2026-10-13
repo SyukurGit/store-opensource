@@ -50,6 +50,11 @@ func (s *OrderService) SetLocalProductRepo(lpr *repository.LocalProductRepositor
 	s.localProductRepo = lpr
 }
 
+// GetOrderByInvoice retrieves an order by its invoice number
+func (s *OrderService) GetOrderByInvoice(invoice string) (*models.Order, error) {
+	return s.orderRepo.GetOrderByInvoice(invoice)
+}
+
 func (s *OrderService) getInvoiceLock(invoice string) *sync.Mutex {
 	l, _ := s.locks.LoadOrStore(invoice, &sync.Mutex{})
 	return l.(*sync.Mutex)

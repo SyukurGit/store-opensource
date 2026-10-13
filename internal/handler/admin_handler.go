@@ -28,6 +28,7 @@ type AdminHandler struct {
 	voucherService  *service.VoucherService
 	maintenanceRepo *repository.MaintenanceRepository
 	localProductRepo *repository.LocalProductRepository
+	reviewRepo       *repository.ReviewRepository
 }
 
 func NewAdminHandler(
@@ -60,6 +61,10 @@ func (h *AdminHandler) SetMaintenanceRepo(mr *repository.MaintenanceRepository) 
 
 func (h *AdminHandler) SetLocalProductRepo(lpr *repository.LocalProductRepository) {
 	h.localProductRepo = lpr
+}
+
+func (h *AdminHandler) SetReviewRepo(rr *repository.ReviewRepository) {
+	h.reviewRepo = rr
 }
 
 type AdminLoginRequest struct {
@@ -435,6 +440,8 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 		PromoPriceIDR:     req.PromoPriceIDR,
 		CustomDescription: req.CustomDescription,
 		CustomTerms:       req.CustomTerms,
+		DisplayOrder:      req.DisplayOrder,
+		SalesCount:        req.SalesCount,
 		IsActive:          req.IsActive,
 		IsForceOutOfStock: req.IsForceOutOfStock,
 		BaselineModalIDR:  modalIDR,
@@ -1172,6 +1179,283 @@ func (h *AdminHandler) ManualDeliverKeys(w http.ResponseWriter, r *http.Request)
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Serial key berhasil dikirimkan ke pembeli",
+	})
+}
+
+// UpdateProductDisplayStats handles PUT /api/admin/products/{slug}/display-stats
+func (h *AdminHandler) UpdateProductDisplayStats(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Slug produk tidak boleh kosong",
+		})
+		return
+	}
+
+	var req models.ProductDisplayStatsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Format request tidak valid",
+		})
+		return
+	}
+
+	if req.SalesCount <= 0 {
+		req.SalesCount = 10
+	}
+	if req.DisplayOrder < 0 {
+		req.DisplayOrder = 0
+	}
+
+	// 1. Try updating local product first if it exists
+	isLocal := false
+	if h.localProductRepo != nil {
+		if lp, err := h.localProductRepo.GetBySlug(slug); err == nil && lp != nil {
+			isLocal = true
+			if err := h.localProductRepo.UpdateDisplayStats(slug, req.DisplayOrder, req.SalesCount); err != nil {
+				sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+					"success": false,
+					"error":   "Gagal memperbarui produk lokal: " + err.Error(),
+				})
+				return
+			}
+		}
+	}
+
+	// 2. If not local, update in product_overrides
+	if !isLocal {
+		if err := h.overrideRepo.UpdateDisplayStats(slug, req.DisplayOrder, req.SalesCount); err != nil {
+			sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"error":   "Gagal memperbarui produk upstream: " + err.Error(),
+			})
+			return
+		}
+		if h.dcClient != nil {
+			h.dcClient.InvalidateCache()
+		}
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Urutan etalase dan jumlah terjual berhasil diperbarui",
+	})
+}
+
+// ListReviews handles GET /api/admin/reviews
+func (h *AdminHandler) ListReviews(w http.ResponseWriter, r *http.Request) {
+	if h.reviewRepo == nil {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    []*models.ProductReview{},
+		})
+		return
+	}
+
+	limit := 100
+	if lStr := r.URL.Query().Get("limit"); lStr != "" {
+		if l, err := strconv.Atoi(lStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	offset := 0
+	if oStr := r.URL.Query().Get("offset"); oStr != "" {
+		if o, err := strconv.Atoi(oStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	slug := strings.TrimSpace(r.URL.Query().Get("slug"))
+	var reviews []*models.ProductReview
+	var err error
+	if slug != "" {
+		reviews, err = h.reviewRepo.GetByProductSlug(slug, false, limit, offset)
+	} else {
+		reviews, err = h.reviewRepo.GetAll(limit, offset)
+	}
+
+	if err != nil {
+		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   "Gagal memuat ulasan: " + err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    reviews,
+	})
+}
+
+// CreateReview handles POST /api/admin/reviews
+func (h *AdminHandler) CreateReview(w http.ResponseWriter, r *http.Request) {
+	if h.reviewRepo == nil {
+		sendJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"success": false,
+			"error":   "Fitur ulasan sedang tidak aktif",
+		})
+		return
+	}
+
+	var req models.AdminReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Format request tidak valid",
+		})
+		return
+	}
+
+	req.ProductSlug = strings.TrimSpace(req.ProductSlug)
+	if req.ProductSlug == "" {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Produk wajib dipilih",
+		})
+		return
+	}
+
+	if req.Rating < 1 || req.Rating > 5 {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Bintang ulasan harus antara 1 sampai 5",
+		})
+		return
+	}
+
+	author := strings.TrimSpace(req.AuthorName)
+	if author == "" {
+		author = "Pelanggan Terverifikasi"
+	}
+
+	rev := &models.ProductReview{
+		ProductSlug:  req.ProductSlug,
+		OrderInvoice: strings.TrimSpace(req.OrderInvoice),
+		AuthorName:   author,
+		Rating:       req.Rating,
+		ReviewText:   strings.TrimSpace(req.ReviewText),
+		IsVisible:    req.IsVisible,
+	}
+
+	if err := h.reviewRepo.Create(rev); err != nil {
+		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   "Gagal membuat ulasan: " + err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusCreated, map[string]interface{}{
+		"success": true,
+		"message": "Ulasan berhasil ditambahkan",
+		"data":    rev,
+	})
+}
+
+// UpdateReview handles PUT /api/admin/reviews/{id}
+func (h *AdminHandler) UpdateReview(w http.ResponseWriter, r *http.Request) {
+	if h.reviewRepo == nil {
+		sendJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"success": false,
+			"error":   "Fitur ulasan sedang tidak aktif",
+		})
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "ID ulasan tidak valid",
+		})
+		return
+	}
+
+	var req models.AdminReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Format request tidak valid",
+		})
+		return
+	}
+
+	rev, err := h.reviewRepo.GetByID(id)
+	if err != nil || rev == nil {
+		sendJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"error":   "Ulasan tidak ditemukan",
+		})
+		return
+	}
+
+	if req.Rating < 1 || req.Rating > 5 {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Bintang ulasan harus antara 1 sampai 5",
+		})
+		return
+	}
+
+	author := strings.TrimSpace(req.AuthorName)
+	if author != "" {
+		rev.AuthorName = author
+	}
+	rev.Rating = req.Rating
+	rev.ReviewText = strings.TrimSpace(req.ReviewText)
+	rev.IsVisible = req.IsVisible
+
+	if err := h.reviewRepo.Update(rev); err != nil {
+		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   "Gagal memperbarui ulasan: " + err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Ulasan berhasil diperbarui",
+		"data":    rev,
+	})
+}
+
+// DeleteReview handles DELETE /api/admin/reviews/{id}
+func (h *AdminHandler) DeleteReview(w http.ResponseWriter, r *http.Request) {
+	if h.reviewRepo == nil {
+		sendJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"success": false,
+			"error":   "Fitur ulasan sedang tidak aktif",
+		})
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "ID ulasan tidak valid",
+		})
+		return
+	}
+
+	if err := h.reviewRepo.Delete(id); err != nil {
+		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   "Gagal menghapus ulasan: " + err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Ulasan berhasil dihapus",
 	})
 }
 

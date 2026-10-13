@@ -138,18 +138,23 @@ func (r *LocalProductRepository) Create(req *models.LocalProductRequest) (*model
 		hasPromoInt = 1
 	}
 
+	salesCount := req.SalesCount
+	if salesCount <= 0 {
+		salesCount = 10
+	}
+
 	query := `
 		INSERT INTO local_products (
 			slug, name, type, logo, region, warranty, description, terms,
 			price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-			stock, stock_keys, is_active, is_force_out_of_stock, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			stock, stock_keys, display_order, sales_count, is_active, is_force_out_of_stock, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`
 
 	res, err := r.db.Exec(query,
 		slug, req.Name, prodType, strings.TrimSpace(req.Logo), region, warranty,
 		req.Description, terms, req.PriceIDR, refPrice, req.PromoPriceIDR,
-		hasPromoInt, discPercent, stock, string(keysBytes), isActiveInt, isForceOutInt,
+		hasPromoInt, discPercent, stock, string(keysBytes), req.DisplayOrder, salesCount, isActiveInt, isForceOutInt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("gagal menambahkan produk lokal: %w", err)
@@ -234,18 +239,23 @@ func (r *LocalProductRepository) Update(id int64, req *models.LocalProductReques
 		hasPromoInt = 1
 	}
 
+	salesCount := req.SalesCount
+	if salesCount <= 0 {
+		salesCount = 10
+	}
+
 	query := `
 		UPDATE local_products SET
 			slug = ?, name = ?, type = ?, logo = ?, region = ?, warranty = ?, description = ?, terms = ?,
 			price_idr = ?, reference_price_idr = ?, promo_price_idr = ?, has_promo = ?, discount_percent = ?,
-			stock = ?, stock_keys = ?, is_active = ?, is_force_out_of_stock = ?, updated_at = CURRENT_TIMESTAMP
+			stock = ?, stock_keys = ?, display_order = ?, sales_count = ?, is_active = ?, is_force_out_of_stock = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`
 
 	_, err = r.db.Exec(query,
 		slug, req.Name, prodType, strings.TrimSpace(req.Logo), region, warranty,
 		req.Description, terms, req.PriceIDR, refPrice, req.PromoPriceIDR,
-		hasPromoInt, discPercent, stock, string(keysBytes), isActiveInt, isForceOutInt,
+		hasPromoInt, discPercent, stock, string(keysBytes), req.DisplayOrder, salesCount, isActiveInt, isForceOutInt,
 		id,
 	)
 	if err != nil {
@@ -260,7 +270,8 @@ func (r *LocalProductRepository) GetByID(id int64) (*models.LocalProduct, error)
 	query := `
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-		       stock, stock_keys, is_active, is_force_out_of_stock, created_at, updated_at
+		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       is_active, is_force_out_of_stock, created_at, updated_at
 		FROM local_products
 		WHERE id = ?
 	`
@@ -273,7 +284,8 @@ func (r *LocalProductRepository) GetBySlug(slug string) (*models.LocalProduct, e
 	query := `
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-		       stock, stock_keys, is_active, is_force_out_of_stock, created_at, updated_at
+		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       is_active, is_force_out_of_stock, created_at, updated_at
 		FROM local_products
 		WHERE slug = ?
 	`
@@ -286,7 +298,8 @@ func (r *LocalProductRepository) GetAll() ([]*models.LocalProduct, error) {
 	query := `
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-		       stock, stock_keys, is_active, is_force_out_of_stock, created_at, updated_at
+		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       is_active, is_force_out_of_stock, created_at, updated_at
 		FROM local_products
 		ORDER BY id DESC
 	`
@@ -312,7 +325,8 @@ func (r *LocalProductRepository) GetAllActive() ([]*models.LocalProduct, error) 
 	query := `
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-		       stock, stock_keys, is_active, is_force_out_of_stock, created_at, updated_at
+		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       is_active, is_force_out_of_stock, created_at, updated_at
 		FROM local_products
 		WHERE is_active = 1
 		ORDER BY id DESC
@@ -332,6 +346,23 @@ func (r *LocalProductRepository) GetAllActive() ([]*models.LocalProduct, error) 
 		list = append(list, p)
 	}
 	return list, nil
+}
+
+// UpdateDisplayStats updates display_order and sales_count for a local product
+func (r *LocalProductRepository) UpdateDisplayStats(slug string, displayOrder int, salesCount int) error {
+	if salesCount <= 0 {
+		salesCount = 10
+	}
+	query := `UPDATE local_products SET display_order = ?, sales_count = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?`
+	res, err := r.db.Exec(query, displayOrder, salesCount, slug)
+	if err != nil {
+		return err
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("produk lokal '%s' tidak ditemukan", slug)
+	}
+	return nil
 }
 
 // Delete removes a local product by ID
@@ -418,10 +449,14 @@ func (r *LocalProductRepository) scanProduct(row *sql.Row) (*models.LocalProduct
 	err := row.Scan(
 		&p.ID, &p.Slug, &p.Name, &p.Type, &p.Logo, &p.Region, &p.Warranty, &p.Description, &p.Terms,
 		&p.PriceIDR, &p.ReferencePriceIDR, &p.PromoPriceIDR, &hasPromoInt, &p.DiscountPercent,
-		&p.Stock, &keysJSON, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
+		&p.Stock, &keysJSON, &p.DisplayOrder, &p.SalesCount, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if p.SalesCount <= 0 {
+		p.SalesCount = 10
 	}
 
 	p.HasPromo = hasPromoInt == 1
@@ -444,10 +479,14 @@ func (r *LocalProductRepository) scanProductFromRows(rows *sql.Rows) (*models.Lo
 	err := rows.Scan(
 		&p.ID, &p.Slug, &p.Name, &p.Type, &p.Logo, &p.Region, &p.Warranty, &p.Description, &p.Terms,
 		&p.PriceIDR, &p.ReferencePriceIDR, &p.PromoPriceIDR, &hasPromoInt, &p.DiscountPercent,
-		&p.Stock, &keysJSON, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
+		&p.Stock, &keysJSON, &p.DisplayOrder, &p.SalesCount, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if p.SalesCount <= 0 {
+		p.SalesCount = 10
 	}
 
 	p.HasPromo = hasPromoInt == 1

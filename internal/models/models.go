@@ -77,6 +77,10 @@ type Product struct {
 	IsAutoSuspended   bool          `json:"isAutoSuspended"`
 	SurgePercent      float64       `json:"surgePercent"`
 	Source            string        `json:"source,omitempty"` // "LOCAL" or "DIGITALCORE"
+	SalesCount        int           `json:"salesCount"`
+	DisplayOrder      int           `json:"displayOrder"`
+	RatingAvg         float64       `json:"ratingAvg"`
+	RatingCount       int           `json:"ratingCount"`
 }
 
 // LocalProduct represents a standalone product managed directly in the local database
@@ -97,6 +101,8 @@ type LocalProduct struct {
 	DiscountPercent   int       `json:"discount_percent"`
 	Stock             int       `json:"stock"`
 	StockKeys         []string  `json:"stock_keys"` // In memory slice; stored as JSON text in DB
+	DisplayOrder      int       `json:"display_order"`
+	SalesCount        int       `json:"sales_count"`
 	IsActive          bool      `json:"is_active"`
 	IsForceOutOfStock bool      `json:"is_force_out_of_stock"`
 	CreatedAt         time.Time `json:"created_at"`
@@ -116,6 +122,11 @@ func (lp *LocalProduct) ToProduct() *Product {
 	discPct := lp.DiscountPercent
 	if discPct <= 0 && lp.HasPromo && refPrice > sellPrice {
 		discPct = int(float64(refPrice-sellPrice) / float64(refPrice) * 100.0)
+	}
+
+	salesCount := lp.SalesCount
+	if salesCount <= 0 {
+		salesCount = 10
 	}
 
 	return &Product{
@@ -139,6 +150,8 @@ func (lp *LocalProduct) ToProduct() *Product {
 		IsForceOutOfStock: lp.IsForceOutOfStock,
 		IsCustomized:      true,
 		Source:            "LOCAL",
+		DisplayOrder:      lp.DisplayOrder,
+		SalesCount:        salesCount,
 	}
 }
 
@@ -157,6 +170,8 @@ type LocalProductRequest struct {
 	PromoPriceIDR     int64    `json:"promo_price_idr"`
 	HasPromo          bool     `json:"has_promo"`
 	StockKeys         []string `json:"stock_keys"` // Up to 10 keys
+	DisplayOrder      int      `json:"display_order"`
+	SalesCount        int      `json:"sales_count"`
 	IsActive          bool     `json:"is_active"`
 	IsForceOutOfStock bool     `json:"is_force_out_of_stock"`
 }
@@ -173,6 +188,8 @@ type ProductOverride struct {
 	PromoPriceIDR     int64     `json:"promo_price_idr"`
 	CustomDescription string    `json:"custom_description"`
 	CustomTerms       string    `json:"custom_terms"`
+	DisplayOrder      int       `json:"display_order"`
+	SalesCount        int       `json:"sales_count"`
 	IsActive          bool      `json:"is_active"`
 	IsForceOutOfStock bool      `json:"is_force_out_of_stock"`
 	BaselineModalIDR  int64     `json:"baseline_modal_idr"`
@@ -192,6 +209,8 @@ type ProductOverrideRequest struct {
 	PromoPriceIDR     int64  `json:"promo_price_idr"`
 	CustomDescription string `json:"custom_description"`
 	CustomTerms       string `json:"custom_terms"`
+	DisplayOrder      int    `json:"display_order"`
+	SalesCount        int    `json:"sales_count"`
 	IsActive          bool   `json:"is_active"`
 	IsForceOutOfStock bool   `json:"is_force_out_of_stock"`
 }
@@ -230,6 +249,8 @@ type AdminProductItem struct {
 	Description          string        `json:"description"`
 	CustomTerms          string        `json:"custom_terms"`
 	Terms                string        `json:"terms"`
+	DisplayOrder         int           `json:"display_order"`
+	SalesCount           int           `json:"sales_count"`
 	IsActive             bool          `json:"is_active"`
 	IsForceOutOfStock    bool          `json:"is_force_out_of_stock"`
 	IsOriginalOutOfStock bool          `json:"is_original_out_of_stock"`
@@ -425,4 +446,51 @@ type DatabaseCleanResult struct {
 	DatabaseSizeAfter  string `json:"database_size_after"`
 	Message            string `json:"message"`
 }
+
+// ProductReview represents buyer or admin review
+type ProductReview struct {
+	ID           int64     `json:"id"`
+	ProductSlug  string    `json:"product_slug"`
+	OrderInvoice string    `json:"order_invoice,omitempty"`
+	AuthorName   string    `json:"author_name"`
+	Rating       int       `json:"rating"`
+	ReviewText   string    `json:"review_text"`
+	IsVisible    bool      `json:"is_visible"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// ReviewStats aggregates rating score and count
+type ReviewStats struct {
+	AverageRating float64     `json:"average_rating"`
+	TotalReviews  int         `json:"total_reviews"`
+	Distribution  map[int]int `json:"distribution"`
+}
+
+// ProductDisplayStatsRequest payload for updating priority order and sold count
+type ProductDisplayStatsRequest struct {
+	DisplayOrder int `json:"display_order"`
+	SalesCount   int `json:"sales_count"`
+}
+
+// SubmitReviewRequest payload from buyer on claim page
+type SubmitReviewRequest struct {
+	InvoiceNumber string `json:"invoice_number"`
+	ClaimCode     string `json:"claim_code"`
+	Rating        int    `json:"rating"`
+	ReviewText    string `json:"review_text"`
+	AuthorName    string `json:"author_name,omitempty"`
+}
+
+// AdminReviewRequest payload for admin creating/editing reviews
+type AdminReviewRequest struct {
+	ProductSlug  string `json:"product_slug"`
+	AuthorName   string `json:"author_name"`
+	Rating       int    `json:"rating"`
+	ReviewText   string `json:"review_text"`
+	IsVisible    bool   `json:"is_visible"`
+	OrderInvoice string `json:"order_invoice,omitempty"`
+	CreatedAt    string `json:"created_at,omitempty"`
+}
+
 

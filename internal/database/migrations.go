@@ -59,6 +59,8 @@ func RunMigrations(db *sql.DB) error {
 			is_force_out_of_stock INTEGER NOT NULL DEFAULT 0,
 			baseline_modal_idr INTEGER DEFAULT 0,
 			is_auto_suspended INTEGER DEFAULT 0,
+			display_order INTEGER NOT NULL DEFAULT 0,
+			sales_count INTEGER NOT NULL DEFAULT 10,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
@@ -125,6 +127,20 @@ func RunMigrations(db *sql.DB) error {
 			stock_keys TEXT NOT NULL DEFAULT '[]',
 			is_active INTEGER NOT NULL DEFAULT 1,
 			is_force_out_of_stock INTEGER NOT NULL DEFAULT 0,
+			display_order INTEGER NOT NULL DEFAULT 0,
+			sales_count INTEGER NOT NULL DEFAULT 10,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);`,
+
+		`CREATE TABLE IF NOT EXISTS product_reviews (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			product_slug TEXT NOT NULL,
+			order_invoice TEXT DEFAULT '',
+			author_name TEXT NOT NULL,
+			rating INTEGER NOT NULL DEFAULT 5,
+			review_text TEXT NOT NULL,
+			is_visible INTEGER NOT NULL DEFAULT 1,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
@@ -151,6 +167,10 @@ func RunMigrations(db *sql.DB) error {
 		"ALTER TABLE product_overrides ADD COLUMN custom_region TEXT DEFAULT '';",
 		"ALTER TABLE product_overrides ADD COLUMN custom_warranty TEXT DEFAULT '';",
 		"ALTER TABLE product_overrides ADD COLUMN custom_stock INTEGER DEFAULT -1;",
+		"ALTER TABLE product_overrides ADD COLUMN display_order INTEGER DEFAULT 0;",
+		"ALTER TABLE product_overrides ADD COLUMN sales_count INTEGER DEFAULT 10;",
+		"ALTER TABLE local_products ADD COLUMN display_order INTEGER DEFAULT 0;",
+		"ALTER TABLE local_products ADD COLUMN sales_count INTEGER DEFAULT 10;",
 		"ALTER TABLE admin_login_logs ADD COLUMN status TEXT DEFAULT 'SUCCESS';",
 		"ALTER TABLE admin_login_logs ADD COLUMN failure_reason TEXT DEFAULT '';",
 	}
@@ -173,6 +193,11 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_vouchers_active ON vouchers(is_active);`,
 		`CREATE INDEX IF NOT EXISTS idx_local_products_slug ON local_products(slug);`,
 		`CREATE INDEX IF NOT EXISTS idx_local_products_active ON local_products(is_active);`,
+		`CREATE INDEX IF NOT EXISTS idx_reviews_slug ON product_reviews(product_slug);`,
+		`CREATE INDEX IF NOT EXISTS idx_reviews_invoice ON product_reviews(order_invoice);`,
+		`CREATE INDEX IF NOT EXISTS idx_reviews_visible ON product_reviews(is_visible);`,
+		`CREATE INDEX IF NOT EXISTS idx_local_products_order ON local_products(display_order);`,
+		`CREATE INDEX IF NOT EXISTS idx_product_overrides_order ON product_overrides(display_order);`,
 	}
 
 	for _, idxQ := range indexQueries {
