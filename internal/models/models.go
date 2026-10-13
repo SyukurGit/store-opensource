@@ -261,6 +261,20 @@ type AdminProductItem struct {
 	Tiers                []ProductTier `json:"tiers"`
 }
 
+// AdminEtalaseProductItem provides a unified model for the /admin/reviews etalase table
+type AdminEtalaseProductItem struct {
+	Slug         string `json:"slug"`
+	Name         string `json:"name"`
+	OriginalName string `json:"original_name"`
+	Type         string `json:"type"`
+	Logo         string `json:"logo"`
+	Region       string `json:"region"`
+	IsActive     bool   `json:"is_active"`
+	DisplayOrder int    `json:"display_order"`
+	SalesCount   int    `json:"sales_count"`
+	Source       string `json:"source"` // "LOCAL" or "DIGITALCORE"
+}
+
 // CheckoutRequest payload from buyer
 type CheckoutRequest struct {
 	ProductSlug     string `json:"product_slug"`

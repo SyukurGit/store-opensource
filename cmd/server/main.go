@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -118,6 +119,7 @@ func main() {
 			r.Get("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
 			r.Post("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
 			r.Get("/admin/products", adminHandler.ListProducts)
+			r.Get("/admin/etalase-products", adminHandler.ListEtalaseProducts)
 			r.Post("/admin/products/{slug}", adminHandler.SaveProductOverride)
 			r.Post("/admin/products/{slug}/reset", adminHandler.ResetProductOverride)
 			r.Put("/admin/products/{slug}/display-stats", adminHandler.UpdateProductDisplayStats)
@@ -209,7 +211,12 @@ func main() {
 		http.ServeFile(w, r, filepath.Join(webDir, "claim.html"))
 	})
 	r.Get("/reviews", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join(webDir, "reviews.html"))
+		slug := r.URL.Query().Get("slug")
+		if slug != "" {
+			http.Redirect(w, r, fmt.Sprintf("/product?slug=%s#customerReviewsSection", url.QueryEscape(slug)), http.StatusFound)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusFound)
 	})
 	r.Get("/about", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "about.html"))
