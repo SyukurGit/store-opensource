@@ -190,6 +190,7 @@ func main() {
 		"/en/product.html":     "/en/product",
 		"/en/payment.html":     "/en/payment",
 		"/en/about.html":       "/en/about",
+		"/en/claim.html":       "/en/claim",
 		"/admin/index.html":    "/admin",
 		"/admin/login.html":    "/admin/login",
 		"/admin/products.html":        "/admin/products",
@@ -266,7 +267,7 @@ func main() {
 		http.ServeFile(w, r, filepath.Join(webDir, "en", "about.html"))
 	})
 	r.Get("/en/claim", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join(webDir, "claim.html"))
+		http.ServeFile(w, r, filepath.Join(webDir, "en", "claim.html"))
 	})
 
 	// Clean Admin Page Handlers
