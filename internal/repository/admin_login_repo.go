@@ -109,7 +109,7 @@ func (r *AdminLoginRepository) GetLoginHistory(limit int) ([]*models.AdminLoginL
 }
 
 // GetSecurityLogs returns filtered logs with total count for the dedicated security page
-func (r *AdminLoginRepository) GetSecurityLogs(statusFilter, searchQuery string, limit, offset int) ([]*models.AdminLoginLog, int64, error) {
+func (r *AdminLoginRepository) GetSecurityLogs(statusFilter, searchQuery, orderDir string, limit, offset int) ([]*models.AdminLoginLog, int64, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -141,6 +141,11 @@ func (r *AdminLoginRepository) GetSecurityLogs(statusFilter, searchQuery string,
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
+	orderClause := "ORDER BY id DESC"
+	if strings.ToUpper(strings.TrimSpace(orderDir)) == "ASC" {
+		orderClause = "ORDER BY id ASC"
+	}
+
 	// 1. Get total count
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM admin_login_logs %s", whereClause)
 	var total int64
@@ -153,9 +158,9 @@ func (r *AdminLoginRepository) GetSecurityLogs(statusFilter, searchQuery string,
 		SELECT id, username, ip_address, user_agent, location, device_info, COALESCE(status, 'SUCCESS'), COALESCE(failure_reason, ''), login_at
 		FROM admin_login_logs
 		%s
-		ORDER BY id DESC
+		%s
 		LIMIT ? OFFSET ?
-	`, whereClause)
+	`, whereClause, orderClause)
 
 	queryArgs := append(args, limit, offset)
 	rows, err := r.db.Query(dataQuery, queryArgs...)

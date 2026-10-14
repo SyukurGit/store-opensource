@@ -33,6 +33,7 @@ type AdminHandler struct {
 	maintenanceRepo *repository.MaintenanceRepository
 	localProductRepo *repository.LocalProductRepository
 	reviewRepo       *repository.ReviewRepository
+	loginLimiter     *LoginAttemptTracker
 }
 
 func NewAdminHandler(
@@ -52,6 +53,7 @@ func NewAdminHandler(
 		loginRepo:    loginRepo,
 		dcClient:     dcClient,
 		orderService: orderService,
+		loginLimiter: NewLoginAttemptTracker(10, 15*time.Minute, 15*time.Minute),
 	}
 }
 
@@ -88,14 +90,51 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientIP := extractClientIP(r)
+
+	// 1. Check Rate Limiter (Temporary IP Ban after >10 failures in 15 mins)
+	if h.loginLimiter != nil {
+		if isBanned, remaining := h.loginLimiter.IsBanned(clientIP); isBanned {
+			mins := int(remaining.Minutes()) + 1
+			sendJSON(w, http.StatusTooManyRequests, map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("Terlalu banyak percobaan login gagal dari IP Anda (%s). Akses diblokir sementara selama %d menit demi keamanan.", clientIP, mins),
+			})
+			return
+		}
+
+		// Anti-bot throttling delay if under rapid global attack
+		if h.loginLimiter.ShouldThrottleGlobal() {
+			time.Sleep(1 * time.Second)
+		}
+	}
+
 	location := extractLocation(r, clientIP)
 	deviceInfo := parseDeviceInfo(r.UserAgent())
 
 	if req.Username != h.cfg.AdminUsername || req.Password != h.cfg.AdminPassword {
-		failReason := "Password salah"
-		if req.Username != h.cfg.AdminUsername {
-			failReason = fmt.Sprintf("Username '%s' tidak terdaftar", req.Username)
+		// Truncate raw password if extremely long to protect DB
+		rawPwd := req.Password
+		if len(rawPwd) > 100 {
+			rawPwd = rawPwd[:100] + "..."
 		}
+		if strings.TrimSpace(rawPwd) == "" {
+			rawPwd = "(kosong)"
+		}
+
+		var failReason string
+		if req.Username != h.cfg.AdminUsername {
+			failReason = fmt.Sprintf("Username '%s' tidak terdaftar • Password dicoba: '%s'", req.Username, rawPwd)
+		} else {
+			failReason = fmt.Sprintf("Password salah • Password dicoba: '%s'", rawPwd)
+		}
+
+		if h.loginLimiter != nil {
+			isNowBanned, count, _ := h.loginLimiter.RecordFailure(clientIP)
+			if isNowBanned {
+				failReason += fmt.Sprintf(" • [IP DIBLOKIR: %d kali gagal]", count)
+			}
+		}
+
 		if h.loginRepo != nil {
 			_ = h.loginRepo.RecordLogin(req.Username, clientIP, r.UserAgent(), location, deviceInfo, "FAILED", failReason)
 		}
@@ -106,9 +145,14 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Success: Reset rate limiter for this IP
+	if h.loginLimiter != nil {
+		h.loginLimiter.Reset(clientIP)
+	}
+
 	token := GenerateAdminToken(h.cfg.AdminSecretKey)
 
-	// Audit Log: Record successful admin login with IP, location, and device
+	// Audit Log: Record successful admin login with IP, location, and device (Password is NEVER logged)
 	if h.loginRepo != nil {
 		_ = h.loginRepo.RecordLogin(req.Username, clientIP, r.UserAgent(), location, deviceInfo, "SUCCESS", "Login berhasil")
 	}
@@ -790,7 +834,9 @@ func (h *AdminHandler) GetSecurityLogs(w http.ResponseWriter, r *http.Request) {
 		offset = off
 	}
 
-	logs, total, err := h.loginRepo.GetSecurityLogs(statusFilter, searchQuery, limit, offset)
+	orderDir := r.URL.Query().Get("order")
+
+	logs, total, err := h.loginRepo.GetSecurityLogs(statusFilter, searchQuery, orderDir, limit, offset)
 	if err != nil {
 		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
@@ -806,6 +852,7 @@ func (h *AdminHandler) GetSecurityLogs(w http.ResponseWriter, r *http.Request) {
 			"total":  total,
 			"limit":  limit,
 			"offset": offset,
+			"order":  orderDir,
 		},
 	})
 }

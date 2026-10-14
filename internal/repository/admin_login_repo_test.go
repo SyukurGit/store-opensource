@@ -63,7 +63,7 @@ func TestAdminLoginRepository(t *testing.T) {
 	}
 
 	// 5. Test Filter by Status: FAILED
-	failedLogs, totalFailed, err := repo.GetSecurityLogs("FAILED", "", 10, 0)
+	failedLogs, totalFailed, err := repo.GetSecurityLogs("FAILED", "", "DESC", 10, 0)
 	if err != nil || totalFailed != 1 || len(failedLogs) != 1 {
 		t.Fatalf("expected 1 failed log, got err: %v, total: %d, len: %d", err, totalFailed, len(failedLogs))
 	}
@@ -72,11 +72,20 @@ func TestAdminLoginRepository(t *testing.T) {
 	}
 
 	// 6. Test Search Query: "Jakarta"
-	jakartaLogs, totalJakarta, err := repo.GetSecurityLogs("ALL", "Jakarta", 10, 0)
+	jakartaLogs, totalJakarta, err := repo.GetSecurityLogs("ALL", "Jakarta", "DESC", 10, 0)
 	if err != nil || totalJakarta != 1 || len(jakartaLogs) != 1 {
 		t.Fatalf("expected 1 Jakarta log, got total: %d", totalJakarta)
 	}
 	if jakartaLogs[0].Location != "Jakarta, ID" {
 		t.Fatalf("expected Jakarta location, got: %s", jakartaLogs[0].Location)
+	}
+
+	// 7. Test Order ASC vs DESC
+	ascLogs, _, err := repo.GetSecurityLogs("ALL", "", "ASC", 10, 0)
+	if err != nil || len(ascLogs) < 2 {
+		t.Fatalf("expected at least 2 logs in ASC order, got: %v", err)
+	}
+	if ascLogs[0].ID > ascLogs[1].ID {
+		t.Errorf("expected ASC order (id[0] < id[1]), got %d > %d", ascLogs[0].ID, ascLogs[1].ID)
 	}
 }
