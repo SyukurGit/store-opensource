@@ -412,6 +412,25 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 				p.Warranty = ov.CustomWarranty
 			}
 
+			if ov.CustomNameEN != "" {
+				p.NameEN = ov.CustomNameEN
+			}
+			if ov.CustomTypeEN != "" {
+				p.TypeEN = ov.CustomTypeEN
+			}
+			if ov.CustomRegionEN != "" {
+				p.RegionEN = ov.CustomRegionEN
+			}
+			if ov.CustomWarrantyEN != "" {
+				p.WarrantyEN = ov.CustomWarrantyEN
+			}
+			if ov.CustomDescriptionEN != "" {
+				p.DescriptionEN = ov.CustomDescriptionEN
+			}
+			if ov.CustomTermsEN != "" {
+				p.TermsEN = ov.CustomTermsEN
+			}
+
 			// Baseline modal tracking & surge evaluation
 			baselineModal := ov.BaselineModalIDR
 			if baselineModal <= 0 {
@@ -605,6 +624,12 @@ func (c *DigitalCoreClient) FetchAdminProducts() ([]*models.AdminProductItem, er
 			if ov.CustomWarranty != "" {
 				item.Warranty = ov.CustomWarranty
 			}
+			item.CustomNameEN = ov.CustomNameEN
+			item.CustomTypeEN = ov.CustomTypeEN
+			item.CustomRegionEN = ov.CustomRegionEN
+			item.CustomWarrantyEN = ov.CustomWarrantyEN
+			item.CustomDescriptionEN = ov.CustomDescriptionEN
+			item.CustomTermsEN = ov.CustomTermsEN
 			item.CustomStock = ov.CustomStock
 			if ov.IsForceOutOfStock {
 				item.Stock = 0

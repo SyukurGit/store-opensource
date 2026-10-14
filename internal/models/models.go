@@ -81,6 +81,14 @@ type Product struct {
 	DisplayOrder      int           `json:"displayOrder"`
 	RatingAvg         float64       `json:"ratingAvg"`
 	RatingCount       int           `json:"ratingCount"`
+
+	// Multilingual fields (English)
+	NameEN            string        `json:"name_en,omitempty"`
+	TypeEN            string        `json:"type_en,omitempty"`
+	RegionEN          string        `json:"region_en,omitempty"`
+	WarrantyEN        string        `json:"warranty_en,omitempty"`
+	DescriptionEN     string        `json:"description_en,omitempty"`
+	TermsEN           string        `json:"terms_en,omitempty"`
 }
 
 // LocalProduct represents a standalone product managed directly in the local database
@@ -94,6 +102,12 @@ type LocalProduct struct {
 	Warranty          string    `json:"warranty"`
 	Description       string    `json:"description"`
 	Terms             string    `json:"terms"`
+	NameEN            string    `json:"name_en"`
+	TypeEN            string    `json:"type_en"`
+	RegionEN          string    `json:"region_en"`
+	WarrantyEN        string    `json:"warranty_en"`
+	DescriptionEN     string    `json:"description_en"`
+	TermsEN           string    `json:"terms_en"`
 	PriceIDR          int64     `json:"price_idr"`
 	ReferencePriceIDR int64     `json:"reference_price_idr"`
 	PromoPriceIDR     int64     `json:"promo_price_idr"`
@@ -152,6 +166,12 @@ func (lp *LocalProduct) ToProduct() *Product {
 		Source:            "LOCAL",
 		DisplayOrder:      lp.DisplayOrder,
 		SalesCount:        salesCount,
+		NameEN:            lp.NameEN,
+		TypeEN:            lp.TypeEN,
+		RegionEN:          lp.RegionEN,
+		WarrantyEN:        lp.WarrantyEN,
+		DescriptionEN:     lp.DescriptionEN,
+		TermsEN:           lp.TermsEN,
 	}
 }
 
@@ -188,6 +208,12 @@ type ProductOverride struct {
 	PromoPriceIDR     int64     `json:"promo_price_idr"`
 	CustomDescription string    `json:"custom_description"`
 	CustomTerms       string    `json:"custom_terms"`
+	CustomNameEN      string    `json:"custom_name_en"`
+	CustomTypeEN      string    `json:"custom_type_en"`
+	CustomRegionEN    string    `json:"custom_region_en"`
+	CustomWarrantyEN  string    `json:"custom_warranty_en"`
+	CustomDescriptionEN string  `json:"custom_description_en"`
+	CustomTermsEN     string    `json:"custom_terms_en"`
 	DisplayOrder      int       `json:"display_order"`
 	SalesCount        int       `json:"sales_count"`
 	IsActive          bool      `json:"is_active"`
@@ -249,6 +275,12 @@ type AdminProductItem struct {
 	Description          string        `json:"description"`
 	CustomTerms          string        `json:"custom_terms"`
 	Terms                string        `json:"terms"`
+	CustomNameEN         string        `json:"custom_name_en,omitempty"`
+	CustomTypeEN         string        `json:"custom_type_en,omitempty"`
+	CustomRegionEN       string        `json:"custom_region_en,omitempty"`
+	CustomWarrantyEN     string        `json:"custom_warranty_en,omitempty"`
+	CustomDescriptionEN  string        `json:"custom_description_en,omitempty"`
+	CustomTermsEN        string        `json:"custom_terms_en,omitempty"`
 	DisplayOrder         int           `json:"display_order"`
 	SalesCount           int           `json:"sales_count"`
 	IsActive             bool          `json:"is_active"`
@@ -506,5 +538,43 @@ type AdminReviewRequest struct {
 	OrderInvoice string `json:"order_invoice,omitempty"`
 	CreatedAt    string `json:"created_at,omitempty"`
 }
+
+// ProductTranslationItem represents product translation info for dedicated Admin Translations menu
+type ProductTranslationItem struct {
+	Slug          string `json:"slug"`
+	Source        string `json:"source"` // "LOCAL" or "DIGITALCORE"
+	NameID        string `json:"name_id"`
+	TypeID        string `json:"type_id"`
+	RegionID      string `json:"region_id"`
+	WarrantyID    string `json:"warranty_id"`
+	DescriptionID string `json:"description_id"`
+	TermsID       string `json:"terms_id"`
+
+	NameEN        string `json:"name_en"`
+	TypeEN        string `json:"type_en"`
+	RegionEN      string `json:"region_en"`
+	WarrantyEN    string `json:"warranty_en"`
+	DescriptionEN string `json:"description_en"`
+	TermsEN       string `json:"terms_en"`
+
+	IsTranslated  bool   `json:"is_translated"`
+	IsActive      bool   `json:"is_active"`
+}
+
+// UpdateTranslationRequest represents request body to update product EN translations
+type UpdateTranslationRequest struct {
+	NameEN        string `json:"name_en"`
+	TypeEN        string `json:"type_en"`
+	RegionEN      string `json:"region_en"`
+	WarrantyEN    string `json:"warranty_en"`
+	DescriptionEN string `json:"description_en"`
+	TermsEN       string `json:"terms_en"`
+}
+
+// AutoDraftRequest represents payload sent to auto-draft translation endpoint
+type AutoDraftRequest struct {
+	Texts map[string]string `json:"texts"` // e.g. {"name": "...", "description": "..."}
+}
+
 
 

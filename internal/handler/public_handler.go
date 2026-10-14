@@ -182,10 +182,41 @@ func (h *PublicHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
 		return false
 	})
 
+	lang := r.URL.Query().Get("lang")
+	for _, p := range merged {
+		applyLanguageToProduct(p, lang)
+	}
+
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    merged,
 	})
+}
+
+func applyLanguageToProduct(p *models.Product, lang string) {
+	if p == nil {
+		return
+	}
+	if strings.ToLower(strings.TrimSpace(lang)) == "en" {
+		if strings.TrimSpace(p.NameEN) != "" {
+			p.Name = p.NameEN
+		}
+		if strings.TrimSpace(p.TypeEN) != "" {
+			p.Type = p.TypeEN
+		}
+		if strings.TrimSpace(p.RegionEN) != "" {
+			p.Region = p.RegionEN
+		}
+		if strings.TrimSpace(p.WarrantyEN) != "" {
+			p.Warranty = p.WarrantyEN
+		}
+		if strings.TrimSpace(p.DescriptionEN) != "" {
+			p.Description = p.DescriptionEN
+		}
+		if strings.TrimSpace(p.TermsEN) != "" {
+			p.Terms = p.TermsEN
+		}
+	}
 }
 
 // GetProductDetail handles GET /api/products/{slug}
@@ -268,6 +299,9 @@ func (h *PublicHandler) GetProductDetail(w http.ResponseWriter, r *http.Request)
 			reviews = revs
 		}
 	}
+
+	lang := r.URL.Query().Get("lang")
+	applyLanguageToProduct(product, lang)
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":      true,

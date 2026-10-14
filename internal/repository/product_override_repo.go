@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"storeku/internal/database"
@@ -21,7 +22,9 @@ func NewProductOverrideRepository(db *database.DB) *ProductOverrideRepository {
 func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride, error) {
 	query := `
 		SELECT product_slug, custom_name, COALESCE(custom_type, ''), COALESCE(custom_region, ''), COALESCE(custom_warranty, ''), COALESCE(custom_stock, -1),
-		       custom_price_idr, promo_price_idr, custom_description, custom_terms, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       custom_price_idr, promo_price_idr, custom_description, custom_terms,
+		       COALESCE(custom_name_en, ''), COALESCE(custom_type_en, ''), COALESCE(custom_region_en, ''), COALESCE(custom_warranty_en, ''), COALESCE(custom_description_en, ''), COALESCE(custom_terms_en, ''),
+		       COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
 		FROM product_overrides
 	`
@@ -46,6 +49,12 @@ func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride
 			&o.PromoPriceIDR,
 			&o.CustomDescription,
 			&o.CustomTerms,
+			&o.CustomNameEN,
+			&o.CustomTypeEN,
+			&o.CustomRegionEN,
+			&o.CustomWarrantyEN,
+			&o.CustomDescriptionEN,
+			&o.CustomTermsEN,
 			&o.DisplayOrder,
 			&o.SalesCount,
 			&isActiveInt,
@@ -74,7 +83,9 @@ func (r *ProductOverrideRepository) GetAll() (map[string]*models.ProductOverride
 func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverride, error) {
 	query := `
 		SELECT product_slug, custom_name, COALESCE(custom_type, ''), COALESCE(custom_region, ''), COALESCE(custom_warranty, ''), COALESCE(custom_stock, -1),
-		       custom_price_idr, promo_price_idr, custom_description, custom_terms, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       custom_price_idr, promo_price_idr, custom_description, custom_terms,
+		       COALESCE(custom_name_en, ''), COALESCE(custom_type_en, ''), COALESCE(custom_region_en, ''), COALESCE(custom_warranty_en, ''), COALESCE(custom_description_en, ''), COALESCE(custom_terms_en, ''),
+		       COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
 		FROM product_overrides
 		WHERE product_slug = ?
@@ -93,6 +104,12 @@ func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverr
 		&o.PromoPriceIDR,
 		&o.CustomDescription,
 		&o.CustomTerms,
+		&o.CustomNameEN,
+		&o.CustomTypeEN,
+		&o.CustomRegionEN,
+		&o.CustomWarrantyEN,
+		&o.CustomDescriptionEN,
+		&o.CustomTermsEN,
 		&o.DisplayOrder,
 		&o.SalesCount,
 		&isActiveInt,
@@ -215,3 +232,33 @@ func (r *ProductOverrideRepository) Delete(slug string) error {
 	}
 	return nil
 }
+
+// UpdateTranslation updates English translation fields for an upstream product override
+func (r *ProductOverrideRepository) UpdateTranslation(slug string, req *models.UpdateTranslationRequest) error {
+	query := `
+		INSERT INTO product_overrides (
+			product_slug, custom_name, custom_name_en, custom_type_en, custom_region_en,
+			custom_warranty_en, custom_description_en, custom_terms_en, custom_stock,
+			is_active, is_force_out_of_stock, baseline_modal_idr, is_auto_suspended, created_at, updated_at
+		) VALUES (?, '', ?, ?, ?, ?, ?, ?, -1, 1, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT(product_slug) DO UPDATE SET
+			custom_name_en = excluded.custom_name_en,
+			custom_type_en = excluded.custom_type_en,
+			custom_region_en = excluded.custom_region_en,
+			custom_warranty_en = excluded.custom_warranty_en,
+			custom_description_en = excluded.custom_description_en,
+			custom_terms_en = excluded.custom_terms_en,
+			updated_at = CURRENT_TIMESTAMP
+	`
+	_, err := r.db.Exec(query,
+		slug,
+		strings.TrimSpace(req.NameEN),
+		strings.TrimSpace(req.TypeEN),
+		strings.TrimSpace(req.RegionEN),
+		strings.TrimSpace(req.WarrantyEN),
+		strings.TrimSpace(req.DescriptionEN),
+		strings.TrimSpace(req.TermsEN),
+	)
+	return err
+}
+

@@ -269,6 +269,7 @@ func (r *LocalProductRepository) Update(id int64, req *models.LocalProductReques
 func (r *LocalProductRepository) GetByID(id int64) (*models.LocalProduct, error) {
 	query := `
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
+		       COALESCE(name_en, ''), COALESCE(type_en, ''), COALESCE(region_en, ''), COALESCE(warranty_en, ''), COALESCE(description_en, ''), COALESCE(terms_en, ''),
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
 		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, created_at, updated_at
@@ -283,6 +284,7 @@ func (r *LocalProductRepository) GetByID(id int64) (*models.LocalProduct, error)
 func (r *LocalProductRepository) GetBySlug(slug string) (*models.LocalProduct, error) {
 	query := `
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
+		       COALESCE(name_en, ''), COALESCE(type_en, ''), COALESCE(region_en, ''), COALESCE(warranty_en, ''), COALESCE(description_en, ''), COALESCE(terms_en, ''),
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
 		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, created_at, updated_at
@@ -297,6 +299,7 @@ func (r *LocalProductRepository) GetBySlug(slug string) (*models.LocalProduct, e
 func (r *LocalProductRepository) GetAll() ([]*models.LocalProduct, error) {
 	query := `
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
+		       COALESCE(name_en, ''), COALESCE(type_en, ''), COALESCE(region_en, ''), COALESCE(warranty_en, ''), COALESCE(description_en, ''), COALESCE(terms_en, ''),
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
 		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, created_at, updated_at
@@ -324,6 +327,7 @@ func (r *LocalProductRepository) GetAll() ([]*models.LocalProduct, error) {
 func (r *LocalProductRepository) GetAllActive() ([]*models.LocalProduct, error) {
 	query := `
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
+		       COALESCE(name_en, ''), COALESCE(type_en, ''), COALESCE(region_en, ''), COALESCE(warranty_en, ''), COALESCE(description_en, ''), COALESCE(terms_en, ''),
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
 		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, created_at, updated_at
@@ -448,6 +452,7 @@ func (r *LocalProductRepository) scanProduct(row *sql.Row) (*models.LocalProduct
 
 	err := row.Scan(
 		&p.ID, &p.Slug, &p.Name, &p.Type, &p.Logo, &p.Region, &p.Warranty, &p.Description, &p.Terms,
+		&p.NameEN, &p.TypeEN, &p.RegionEN, &p.WarrantyEN, &p.DescriptionEN, &p.TermsEN,
 		&p.PriceIDR, &p.ReferencePriceIDR, &p.PromoPriceIDR, &hasPromoInt, &p.DiscountPercent,
 		&p.Stock, &keysJSON, &p.DisplayOrder, &p.SalesCount, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
 	)
@@ -478,6 +483,7 @@ func (r *LocalProductRepository) scanProductFromRows(rows *sql.Rows) (*models.Lo
 
 	err := rows.Scan(
 		&p.ID, &p.Slug, &p.Name, &p.Type, &p.Logo, &p.Region, &p.Warranty, &p.Description, &p.Terms,
+		&p.NameEN, &p.TypeEN, &p.RegionEN, &p.WarrantyEN, &p.DescriptionEN, &p.TermsEN,
 		&p.PriceIDR, &p.ReferencePriceIDR, &p.PromoPriceIDR, &hasPromoInt, &p.DiscountPercent,
 		&p.Stock, &keysJSON, &p.DisplayOrder, &p.SalesCount, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
 	)
@@ -499,4 +505,30 @@ func (r *LocalProductRepository) scanProductFromRows(rows *sql.Rows) (*models.Lo
 	}
 
 	return &p, nil
+}
+
+// UpdateTranslation updates English textual fields for a local product
+func (r *LocalProductRepository) UpdateTranslation(slug string, req *models.UpdateTranslationRequest) error {
+	query := `
+		UPDATE local_products SET
+			name_en = ?, type_en = ?, region_en = ?, warranty_en = ?, description_en = ?, terms_en = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE slug = ?
+	`
+	res, err := r.db.Exec(query,
+		strings.TrimSpace(req.NameEN),
+		strings.TrimSpace(req.TypeEN),
+		strings.TrimSpace(req.RegionEN),
+		strings.TrimSpace(req.WarrantyEN),
+		strings.TrimSpace(req.DescriptionEN),
+		strings.TrimSpace(req.TermsEN),
+		slug,
+	)
+	if err != nil {
+		return err
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("produk lokal '%s' tidak ditemukan", slug)
+	}
+	return nil
 }

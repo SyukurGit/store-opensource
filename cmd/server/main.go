@@ -149,6 +149,11 @@ func main() {
 			r.Post("/admin/custom-products/{id}", adminHandler.UpdateLocalProduct)
 			r.Delete("/admin/custom-products/{id}", adminHandler.DeleteLocalProduct)
 			r.Post("/admin/orders/{invoice}/manual-deliver-keys", adminHandler.ManualDeliverKeys)
+
+			// Multilingual Translations Management
+			r.Get("/admin/translations", adminHandler.GetTranslations)
+			r.Put("/admin/translations/{slug}", adminHandler.UpdateTranslation)
+			r.Post("/admin/translations/auto-draft", adminHandler.AutoDraftTranslation)
 		})
 	})
 
@@ -176,10 +181,15 @@ func main() {
 		"/warranty.html":       "/warranty",
 		"/privacy.html":        "/privacy",
 		"/terms.html":          "/terms",
+		"/en/index.html":       "/en/",
+		"/en/product.html":     "/en/product",
+		"/en/payment.html":     "/en/payment",
+		"/en/about.html":       "/en/about",
 		"/admin/index.html":    "/admin",
 		"/admin/login.html":    "/admin/login",
 		"/admin/products.html":        "/admin/products",
 		"/admin/custom-products.html": "/admin/custom-products",
+		"/admin/translations.html":    "/admin/translations",
 		"/admin/orders.html":          "/admin/orders",
 		"/admin/vouchers.html":        "/admin/vouchers",
 		"/admin/reviews.html":         "/admin/reviews",
@@ -234,6 +244,26 @@ func main() {
 		http.ServeFile(w, r, filepath.Join(webDir, "terms.html"))
 	})
 
+	// English Clean URL Pages
+	r.Get("/en", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/en/", http.StatusMovedPermanently)
+	})
+	r.Get("/en/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "en", "index.html"))
+	})
+	r.Get("/en/product", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "en", "product.html"))
+	})
+	r.Get("/en/payment", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "en", "payment.html"))
+	})
+	r.Get("/en/about", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "en", "about.html"))
+	})
+	r.Get("/en/claim", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "claim.html"))
+	})
+
 	// Clean Admin Page Handlers
 	r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "index.html"))
@@ -261,6 +291,9 @@ func main() {
 	})
 	r.Get("/admin/custom-products", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "custom-products.html"))
+	})
+	r.Get("/admin/translations", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "translations.html"))
 	})
 	r.Get("/admin/reviews", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "reviews.html"))
