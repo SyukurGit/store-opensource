@@ -168,6 +168,11 @@ func main() {
 	r.Get("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "robots.txt"))
 	})
+	r.Get("/version.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		http.ServeFile(w, r, filepath.Join(webDir, "version.json"))
+	})
 
 	// 301 Permanent Redirects for legacy .html URLs
 	cleanRedirects := map[string]string{

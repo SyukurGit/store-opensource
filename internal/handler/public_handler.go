@@ -100,6 +100,10 @@ func (h *PublicHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
 
 	// If DigitalCore upstream sync is turned OFF, return only local products immediately
 	if !dcEnabled {
+		lang := r.URL.Query().Get("lang")
+		for _, lp := range localProducts {
+			applyLanguageToProduct(lp, lang)
+		}
 		sendJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"data":    localProducts,
