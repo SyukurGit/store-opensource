@@ -190,6 +190,10 @@ func main() {
 		"/en/product.html":     "/en/product",
 		"/en/payment.html":     "/en/payment",
 		"/en/about.html":       "/en/about",
+		"/en/how-to-buy.html":  "/en/how-to-buy",
+		"/en/warranty.html":    "/en/warranty",
+		"/en/privacy.html":     "/en/privacy",
+		"/en/terms.html":       "/en/terms",
 		"/en/claim.html":       "/en/claim",
 		"/admin/index.html":    "/admin",
 		"/admin/login.html":    "/admin/login",
@@ -265,6 +269,18 @@ func main() {
 	})
 	r.Get("/en/about", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "en", "about.html"))
+	})
+	r.Get("/en/how-to-buy", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "en", "how-to-buy.html"))
+	})
+	r.Get("/en/warranty", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "en", "warranty.html"))
+	})
+	r.Get("/en/privacy", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "en", "privacy.html"))
+	})
+	r.Get("/en/terms", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "en", "terms.html"))
 	})
 	r.Get("/en/claim", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "en", "claim.html"))
