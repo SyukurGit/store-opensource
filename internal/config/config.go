@@ -26,6 +26,8 @@ type Config struct {
 	TelegramSupportUsername string
 	AllowedOrigins          string
 	VoucherSecretKey        string
+	SilvexBaseURL           string
+	SilvexAPIKey            string
 }
 
 func LoadConfig() *Config {
@@ -37,6 +39,8 @@ func LoadConfig() *Config {
 		DatabasePath:            getEnv("DATABASE_PATH", "storeku.db"),
 		DigitalCoreBaseURL:      getEnv("DIGITALCORE_BASE_URL", "https://digitalcore.top"),
 		DigitalCoreAPIKey:       getEnv("DIGITALCORE_API_KEY", ""),
+		SilvexBaseURL:           getEnv("SILVEX_BASE_URL", "https://silvex-ai.com/api/public/reseller"),
+		SilvexAPIKey:            getEnv("SILVEX_API_KEY", ""),
 		PaymentGAPIURL:          getEnv("PAYMENTG_API_URL", "https://paymentg.syukurapi.online/api/sandbox"),
 		PaymentGAPIKey:          getEnv("PAYMENTG_API_KEY", ""),
 		AdminUsername:           getEnv("ADMIN_USERNAME", "admin"),

@@ -80,6 +80,14 @@ func generateRandomString(n int) string {
 	return strings.ToUpper(hex.EncodeToString(bytes)[:n])
 }
 
+// resolveProviderID resolves the provider name from product slug or registered adapters
+func (s *OrderService) resolveProviderID(productSlug string) string {
+	if strings.HasPrefix(productSlug, "silvex_") {
+		return "SILVEX"
+	}
+	return "DIGITALCORE"
+}
+
 // CreateCheckout initiates a checkout and generates PaymentG QRIS
 func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.CheckoutResponse, error) {
 	if req.ProductSlug == "" {
@@ -105,6 +113,20 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	if targetProduct == nil && s.localProductRepo != nil {
 		if lp, err := s.localProductRepo.GetBySlug(req.ProductSlug); err == nil && lp != nil && lp.IsActive {
 			targetProduct = lp.ToProduct()
+		}
+	}
+
+	if targetProduct == nil && s.providerRegistry != nil {
+		provID := s.resolveProviderID(req.ProductSlug)
+		if prov, ok := s.providerRegistry.Get(provID); ok {
+			if prods, err := prov.FetchCatalog(context.Background()); err == nil {
+				for _, p := range prods {
+					if p.Slug == req.ProductSlug {
+						targetProduct = p
+						break
+					}
+				}
+			}
 		}
 	}
 
@@ -435,7 +457,7 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 
 	// MULTI-PROVIDER FULFILLMENT: Check if provider registry is available
 	if s.providerRegistry != nil {
-		provID := "DIGITALCORE"
+		provID := s.resolveProviderID(order.ProductSlug)
 		if prov, ok := s.providerRegistry.Get(provID); ok {
 			ctx := context.Background()
 
@@ -478,6 +500,16 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 			if err != nil {
 				log.Printf("[FULFILLMENT ERROR] Order %s failed to buy from %s: %v", invoice, prov.Name(), err)
 				_ = s.orderRepo.UpdateFulfillment(invoice, "FAILED", err.Error(), "", "", "[]")
+				return nil
+			}
+
+			if !fulRes.Success {
+				if fulRes.ErrorMessage == "PENDING_MANUAL_DELIVERY" {
+					_ = s.orderRepo.UpdateFulfillmentWithCost(invoice, "PENDING_MANUAL_DELIVERY", "Pesanan item manual sedang diproses upstream. Lisensi akan diserahkan admin via Telegram.", fulRes.ProviderOrderID, fulRes.ProviderViewURL, "[]", fulRes.WholesaleCostUSD)
+					log.Printf("[FULFILLMENT PENDING MANUAL] Order %s marked PENDING_MANUAL_DELIVERY from %s (Provider Order ID: %s)", invoice, prov.Name(), fulRes.ProviderOrderID)
+					return nil
+				}
+				_ = s.orderRepo.UpdateFulfillment(invoice, "FAILED", fulRes.ErrorMessage, fulRes.ProviderOrderID, "", "[]")
 				return nil
 			}
 
@@ -568,7 +600,8 @@ func (s *OrderService) ForceFulfillOrder(invoice string) error {
 	}
 
 	if s.providerRegistry != nil {
-		if prov, ok := s.providerRegistry.Get("DIGITALCORE"); ok {
+		provID := s.resolveProviderID(order.ProductSlug)
+		if prov, ok := s.providerRegistry.Get(provID); ok {
 			log.Printf("[FORCE FULFILL] Admin forced buy for %s via provider %s...", invoice, prov.Name())
 			fulReq := &provider.FulfillmentRequest{
 				InvoiceNumber:   order.InvoiceNumber,
@@ -584,8 +617,18 @@ func (s *OrderService) ForceFulfillOrder(invoice string) error {
 				return fmt.Errorf("gagal memenuhi stok dari %s: %w", prov.Name(), err)
 			}
 
+			if !fulRes.Success {
+				if fulRes.ErrorMessage == "PENDING_MANUAL_DELIVERY" {
+					_ = s.orderRepo.UpdateFulfillmentWithCost(invoice, "PENDING_MANUAL_DELIVERY", "Pesanan item manual sedang diproses upstream. Lisensi akan diserahkan admin via Telegram.", fulRes.ProviderOrderID, fulRes.ProviderViewURL, "[]", fulRes.WholesaleCostUSD)
+					return nil
+				}
+				_ = s.orderRepo.UpdateFulfillment(invoice, "FAILED", fulRes.ErrorMessage, fulRes.ProviderOrderID, "", "[]")
+				return fmt.Errorf("gagal memenuhi stok dari %s: %s", prov.Name(), fulRes.ErrorMessage)
+			}
+
 			itemsJSON, _ := json.Marshal(fulRes.DeliveredItems)
-			if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", fulRes.ProviderOrderID, fulRes.ProviderViewURL, string(itemsJSON), 0); err != nil {
+			costUSD := fulRes.WholesaleCostUSD
+			if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", fulRes.ProviderOrderID, fulRes.ProviderViewURL, string(itemsJSON), costUSD); err != nil {
 				return err
 			}
 			return nil

@@ -274,8 +274,10 @@ func (s *CatalogService) fetchAggregatedRaw(ctx context.Context) ([]*models.Prod
 
 	// 2. Determine active providers
 	dcEnabled := true
+	silvexEnabled := true
 	if s.settingRepo != nil {
 		dcEnabled = s.settingRepo.Get("digitalcore_enabled", "true") != "false"
+		silvexEnabled = s.settingRepo.Get("silvex_enabled", "true") != "false"
 	}
 
 	var activeProviders []string
@@ -283,6 +285,9 @@ func (s *CatalogService) fetchAggregatedRaw(ctx context.Context) ([]*models.Prod
 		for _, p := range s.registry.List() {
 			if p.ID() == "DIGITALCORE" && !dcEnabled {
 				continue // Skip if DigitalCore upstream sync turned OFF
+			}
+			if p.ID() == "SILVEX" && !silvexEnabled {
+				continue // Skip if Silvex AI upstream sync turned OFF
 			}
 			activeProviders = append(activeProviders, p.ID())
 		}

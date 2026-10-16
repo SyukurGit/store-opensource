@@ -129,6 +129,9 @@ func (h *AdminHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	if _, ok := all["digitalcore_enabled"]; !ok {
 		all["digitalcore_enabled"] = "true"
 	}
+	if _, ok := all["silvex_enabled"]; !ok {
+		all["silvex_enabled"] = "true"
+	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -154,6 +157,7 @@ func (h *AdminHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 		"max_surge_disable_percent": true,
 		"telegram_cs_username":      true,
 		"digitalcore_enabled":       true,
+		"silvex_enabled":            true,
 	}
 
 	for k, v := range body {
@@ -170,5 +174,53 @@ func (h *AdminHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Pengaturan harga dan margin berhasil diperbarui",
+	})
+}
+
+// CheckSilvexConnection handles GET and POST /api/admin/silvex/check
+func (h *AdminHandler) CheckSilvexConnection(w http.ResponseWriter, r *http.Request) {
+	var result *models.DigitalCoreCheckResult
+	var err error
+
+	if h.providerRegistry != nil {
+		if prov, ok := h.providerRegistry.Get("SILVEX"); ok {
+			health, hErr := prov.CheckHealth(r.Context())
+			if health != nil {
+				result = &models.DigitalCoreCheckResult{
+					Success:      health.Success,
+					Configured:   health.Configured,
+					BaseURL:      h.cfg.SilvexBaseURL,
+					APIKeyMasked: "***",
+					HTTPStatus:   health.HTTPStatus,
+					Balance:      health.Balance,
+					TotalOrders:  health.TotalOrders,
+					RawResponse:  health.RawResponse,
+					Message:      health.Message,
+				}
+			}
+			err = hErr
+		}
+	}
+
+	if result == nil {
+		result = &models.DigitalCoreCheckResult{
+			Success: false,
+			Message: "Penyedia Silvex AI tidak terdaftar di sistem",
+		}
+	}
+
+	if err != nil {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"data":    result,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": result.Success,
+		"data":    result,
+		"message": result.Message,
 	})
 }

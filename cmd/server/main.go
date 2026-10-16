@@ -18,6 +18,7 @@ import (
 	"storeku/internal/provider"
 	"storeku/internal/provider/digitalcore"
 	"storeku/internal/provider/local"
+	"storeku/internal/provider/silvex"
 	"storeku/internal/repository"
 	"storeku/internal/service"
 )
@@ -49,8 +50,10 @@ func main() {
 	providerRegistry := provider.NewRegistry()
 	localProvider := local.NewLocalProvider(localProductRepo)
 	dcAdapter := digitalcore.NewAdapter(cfg, pricingService)
+	silvexAdapter := silvex.NewAdapter(cfg, pricingService)
 	providerRegistry.Register(localProvider)
 	providerRegistry.Register(dcAdapter)
+	providerRegistry.Register(silvexAdapter)
 
 	catalogService := service.NewCatalogService(providerRegistry, pricingService, overrideRepo, settingRepo, db)
 
@@ -135,6 +138,8 @@ func main() {
 			r.Get("/admin/security/stats", adminHandler.GetSecurityStats)
 			r.Get("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
 			r.Post("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
+			r.Get("/admin/silvex/check", adminHandler.CheckSilvexConnection)
+			r.Post("/admin/silvex/check", adminHandler.CheckSilvexConnection)
 			r.Get("/admin/products", adminHandler.ListProducts)
 			r.Get("/admin/etalase-products", adminHandler.ListEtalaseProducts)
 			r.Post("/admin/products/{slug}", adminHandler.SaveProductOverride)

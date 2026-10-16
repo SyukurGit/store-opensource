@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"storeku/internal/config"
 	"storeku/internal/database"
 	"storeku/internal/models"
+	"storeku/internal/provider"
 	"storeku/internal/repository"
 )
 
@@ -738,6 +740,133 @@ func TestLocalProductOrderFulfillmentAndManualDeliver(t *testing.T) {
 	_ = json.Unmarshal([]byte(fulfilledB.DeliveredItems), &deliveredKeysB)
 	if len(deliveredKeysB) != 1 || deliveredKeysB[0] != "MANUAL-KEY-NETFLIX-999" {
 		t.Errorf("expected MANUAL-KEY-NETFLIX-999 delivered, got %v", deliveredKeysB)
+	}
+}
+
+type mockSilvexProvider struct {
+	fulfillFunc func(ctx context.Context, req *provider.FulfillmentRequest) (*provider.FulfillmentResult, error)
+	liveCost    float64
+}
+
+func (m *mockSilvexProvider) ID() string   { return "SILVEX" }
+func (m *mockSilvexProvider) Name() string { return "Silvex AI" }
+func (m *mockSilvexProvider) FetchCatalog(ctx context.Context) ([]*models.Product, error) {
+	return []*models.Product{
+		{Slug: "silvex_chatgpt_plus", Name: "ChatGPT Plus 1 Month", PriceUSD: 3.5, PriceIDR: 70000, Source: "SILVEX"},
+	}, nil
+}
+func (m *mockSilvexProvider) GetLiveCost(ctx context.Context, itemID string, qty int) (float64, error) {
+	return m.liveCost, nil
+}
+func (m *mockSilvexProvider) Fulfill(ctx context.Context, req *provider.FulfillmentRequest) (*provider.FulfillmentResult, error) {
+	if m.fulfillFunc != nil {
+		return m.fulfillFunc(ctx, req)
+	}
+	return &provider.FulfillmentResult{
+		Success:          true,
+		ProviderOrderID:  "SILVEX-ORD-888",
+		DeliveredItems:   []string{"Account: test@example.com:password123"},
+		WholesaleCostUSD: 3.5,
+	}, nil
+}
+func (m *mockSilvexProvider) CheckHealth(ctx context.Context) (*provider.HealthResult, error) {
+	return &provider.HealthResult{Success: true, Configured: true, Balance: 50.0, Currency: "USD"}, nil
+}
+
+func TestMultiProviderSilvexOrderFulfillment(t *testing.T) {
+	svc, orderRepo := setupTestOrderService(t)
+
+	mockSilvex := &mockSilvexProvider{
+		liveCost: 3.5,
+	}
+	reg := provider.NewRegistry()
+	reg.Register(mockSilvex)
+	svc.SetProviderRegistry(reg)
+
+	// Case 1: Instant Silvex fulfillment
+	exp := time.Now().Add(15 * time.Minute)
+	order1 := &models.Order{
+		InvoiceNumber:     "INV-SILVEX-001",
+		ClaimCode:         "CLM-SILVEX-001",
+		ProductSlug:       "silvex_chatgpt_plus",
+		ProductName:       "ChatGPT Plus 1 Month",
+		ProductType:       "AI Account",
+		Quantity:          1,
+		TotalAmount:       85000,
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := orderRepo.CreateOrder(order1); err != nil {
+		t.Fatalf("failed to create order1: %v", err)
+	}
+
+	if err := svc.ProcessPaymentSuccess("INV-SILVEX-001", "TRX-SILVEX-001"); err != nil {
+		t.Fatalf("ProcessPaymentSuccess failed for silvex order1: %v", err)
+	}
+
+	updated1, err := orderRepo.GetOrderByInvoice("INV-SILVEX-001")
+	if err != nil {
+		t.Fatalf("failed to get order1: %v", err)
+	}
+	if updated1.PaymentStatus != "PAID" {
+		t.Errorf("expected PAID, got %s", updated1.PaymentStatus)
+	}
+	if updated1.FulfillmentStatus != "SUCCESS" {
+		t.Errorf("expected SUCCESS for instant Silvex delivery, got %s", updated1.FulfillmentStatus)
+	}
+	if updated1.DigitalCoreOrderID != "SILVEX-ORD-888" {
+		t.Errorf("expected DigitalCoreOrderID 'SILVEX-ORD-888', got %s", updated1.DigitalCoreOrderID)
+	}
+	var deliveredItems1 []string
+	_ = json.Unmarshal([]byte(updated1.DeliveredItems), &deliveredItems1)
+	if len(deliveredItems1) != 1 || deliveredItems1[0] != "Account: test@example.com:password123" {
+		t.Errorf("unexpected delivered items: %v", deliveredItems1)
+	}
+
+	// Case 2: Manual / Pending delivery from Silvex upstream
+	mockSilvex.fulfillFunc = func(ctx context.Context, req *provider.FulfillmentRequest) (*provider.FulfillmentResult, error) {
+		return &provider.FulfillmentResult{
+			Success:          false,
+			ProviderOrderID:  "SILVEX-PENDING-999",
+			DeliveredItems:   []string{},
+			ErrorMessage:     "PENDING_MANUAL_DELIVERY",
+			WholesaleCostUSD: 3.5,
+		}, nil
+	}
+
+	order2 := &models.Order{
+		InvoiceNumber:     "INV-SILVEX-002",
+		ClaimCode:         "CLM-SILVEX-002",
+		ProductSlug:       "silvex_chatgpt_plus",
+		ProductName:       "ChatGPT Plus 1 Month",
+		ProductType:       "AI Account",
+		Quantity:          1,
+		TotalAmount:       85000,
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := orderRepo.CreateOrder(order2); err != nil {
+		t.Fatalf("failed to create order2: %v", err)
+	}
+
+	if err := svc.ProcessPaymentSuccess("INV-SILVEX-002", "TRX-SILVEX-002"); err != nil {
+		t.Fatalf("ProcessPaymentSuccess failed for silvex order2: %v", err)
+	}
+
+	updated2, err := orderRepo.GetOrderByInvoice("INV-SILVEX-002")
+	if err != nil {
+		t.Fatalf("failed to get order2: %v", err)
+	}
+	if updated2.PaymentStatus != "PAID" {
+		t.Errorf("expected PAID, got %s", updated2.PaymentStatus)
+	}
+	if updated2.FulfillmentStatus != "PENDING_MANUAL_DELIVERY" {
+		t.Errorf("expected PENDING_MANUAL_DELIVERY for manual Silvex order, got %s", updated2.FulfillmentStatus)
+	}
+	if updated2.DigitalCoreOrderID != "SILVEX-PENDING-999" {
+		t.Errorf("expected DigitalCoreOrderID 'SILVEX-PENDING-999', got %s", updated2.DigitalCoreOrderID)
 	}
 }
 
