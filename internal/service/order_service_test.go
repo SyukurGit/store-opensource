@@ -13,6 +13,7 @@ import (
 	"storeku/internal/config"
 	"storeku/internal/database"
 	"storeku/internal/models"
+	"storeku/internal/payment"
 	"storeku/internal/provider"
 	"storeku/internal/repository"
 )
@@ -869,4 +870,151 @@ func TestMultiProviderSilvexOrderFulfillment(t *testing.T) {
 		t.Errorf("expected DigitalCoreOrderID 'SILVEX-PENDING-999', got %s", updated2.DigitalCoreOrderID)
 	}
 }
+
+type mockPaymentGateway struct {
+	id                string
+	name              string
+	createPaymentFunc func(ctx context.Context, req *payment.CreatePaymentRequest) (*payment.PaymentResponse, error)
+	checkStatusFunc   func(ctx context.Context, gatewayOrderID string) (*payment.PaymentStatusResponse, error)
+	triggerCheckFunc  func(ctx context.Context, gatewayOrderID string) error
+	verifyWebhookFunc func(ctx context.Context, r *http.Request) (*payment.WebhookNotification, error)
+}
+
+func (m *mockPaymentGateway) ID() string { return m.id }
+func (m *mockPaymentGateway) Name() string { return m.name }
+func (m *mockPaymentGateway) SupportedMethods() []payment.Method { return []payment.Method{payment.MethodQRIS} }
+func (m *mockPaymentGateway) CreatePayment(ctx context.Context, req *payment.CreatePaymentRequest) (*payment.PaymentResponse, error) {
+	if m.createPaymentFunc != nil {
+		return m.createPaymentFunc(ctx, req)
+	}
+	return &payment.PaymentResponse{
+		GatewayOrderID: "GW-123",
+		TotalAmount:    req.Amount,
+		QRURL:          "https://example.com/qr.png",
+	}, nil
+}
+func (m *mockPaymentGateway) CheckStatus(ctx context.Context, gatewayOrderID string) (*payment.PaymentStatusResponse, error) {
+	if m.checkStatusFunc != nil {
+		return m.checkStatusFunc(ctx, gatewayOrderID)
+	}
+	return &payment.PaymentStatusResponse{
+		GatewayOrderID: gatewayOrderID,
+		Status:         "PAID",
+		TransactionID:  "TX-MOCK-999",
+	}, nil
+}
+func (m *mockPaymentGateway) TriggerInstantCheck(ctx context.Context, gatewayOrderID string) error {
+	if m.triggerCheckFunc != nil {
+		return m.triggerCheckFunc(ctx, gatewayOrderID)
+	}
+	return nil
+}
+func (m *mockPaymentGateway) VerifyWebhook(ctx context.Context, r *http.Request) (*payment.WebhookNotification, error) {
+	if m.verifyWebhookFunc != nil {
+		return m.verifyWebhookFunc(ctx, r)
+	}
+	return &payment.WebhookNotification{
+		Event:         "payment.success",
+		InvoiceNumber: "INV-TEST",
+		IsVerified:    true,
+	}, nil
+}
+
+func TestOrderService_GetOrderStatusPaymentFields(t *testing.T) {
+	svc, repo := setupTestOrderService(t)
+
+	exp := time.Now().Add(15 * time.Minute)
+	order := &models.Order{
+		InvoiceNumber:     "INV-PAY-001",
+		ClaimCode:         "CLM-PAY-001",
+		ProductSlug:       "test-slug",
+		ProductName:       "Test Prod",
+		Quantity:          1,
+		TotalAmount:       15000,
+		PaymentGateway:    "MIDTRANS",
+		PaymentMethod:     "VIRTUAL_ACCOUNT",
+		PaymentChannel:    "BCA_VA",
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := repo.CreateOrder(order); err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
+
+	res, err := svc.GetOrderStatus("INV-PAY-001")
+	if err != nil {
+		t.Fatalf("GetOrderStatus failed: %v", err)
+	}
+
+	if res.PaymentGateway != "MIDTRANS" {
+		t.Errorf("expected PaymentGateway 'MIDTRANS', got '%s'", res.PaymentGateway)
+	}
+	if res.PaymentMethod != "VIRTUAL_ACCOUNT" {
+		t.Errorf("expected PaymentMethod 'VIRTUAL_ACCOUNT', got '%s'", res.PaymentMethod)
+	}
+	if res.PaymentChannel != "BCA_VA" {
+		t.Errorf("expected PaymentChannel 'BCA_VA', got '%s'", res.PaymentChannel)
+	}
+}
+
+func TestOrderService_TriggerInstantCheckWithUnifiedGateway(t *testing.T) {
+	svc, repo := setupTestOrderService(t)
+
+	mockGW := &mockPaymentGateway{
+		id:   "MOCK_GW",
+		name: "Mock Gateway",
+		checkStatusFunc: func(ctx context.Context, gatewayOrderID string) (*payment.PaymentStatusResponse, error) {
+			if gatewayOrderID == "GW-ORD-888" {
+				return &payment.PaymentStatusResponse{
+					GatewayOrderID: gatewayOrderID,
+					Status:         "PAID",
+					TransactionID:  "TX-SETTLED-888",
+				}, nil
+			}
+			return &payment.PaymentStatusResponse{
+				GatewayOrderID: gatewayOrderID,
+				Status:         "PENDING",
+			}, nil
+		},
+	}
+
+	registry := payment.NewRegistry()
+	registry.Register(mockGW)
+	svc.SetPaymentRegistry(registry)
+
+	exp := time.Now().Add(15 * time.Minute)
+	order := &models.Order{
+		InvoiceNumber:     "INV-INSTANT-001",
+		ClaimCode:         "CLM-INSTANT-001",
+		ProductSlug:       "test-slug",
+		ProductName:       "Test Prod",
+		Quantity:          1,
+		TotalAmount:       25000,
+		GatewayOrderID:    "GW-ORD-888",
+		PaymentGateway:    "MOCK_GW",
+		PaymentMethod:     "QRIS",
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := repo.CreateOrder(order); err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
+
+	// Trigger instant check
+	if err := svc.TriggerInstantCheck("INV-INSTANT-001"); err != nil {
+		t.Fatalf("TriggerInstantCheck failed: %v", err)
+	}
+
+	// Verify order was marked PAID
+	updated, err := repo.GetOrderByInvoice("INV-INSTANT-001")
+	if err != nil {
+		t.Fatalf("failed to fetch updated order: %v", err)
+	}
+	if updated.PaymentStatus != "PAID" {
+		t.Errorf("expected order status PAID, got '%s'", updated.PaymentStatus)
+	}
+}
+
 

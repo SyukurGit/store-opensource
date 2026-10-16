@@ -23,16 +23,26 @@ func (r *OrderRepository) CreateOrder(o *models.Order) error {
 		o.ExpiresAt = &utc
 	}
 
+	if o.PaymentGateway == "" {
+		o.PaymentGateway = "PAYMENTG"
+	}
+	if o.PaymentMethod == "" {
+		o.PaymentMethod = "QRIS"
+	}
+	if o.PaymentChannel == "" {
+		o.PaymentChannel = "SHOPEEPAY"
+	}
+
 	query := `
 		INSERT INTO orders (
 			invoice_number, claim_code, product_slug, product_name, product_type,
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
-			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
+			total_amount, gateway_order_id, payment_gateway, payment_method, payment_channel, qr_url, payment_status, fulfillment_status,
 			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, voucher_code, discount_idr, expires_at, created_at, updated_at
 		) VALUES (
 			?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?,
+			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 		)
 	`
@@ -40,7 +50,7 @@ func (r *OrderRepository) CreateOrder(o *models.Order) error {
 		query,
 		o.InvoiceNumber, o.ClaimCode, o.ProductSlug, o.ProductName, o.ProductType,
 		o.Quantity, o.BasePriceUSD, o.SellPriceIDR, o.OriginalAmount, o.UniqueCode,
-		o.TotalAmount, o.GatewayOrderID, o.QRURL, o.PaymentStatus, o.FulfillmentStatus,
+		o.TotalAmount, o.GatewayOrderID, o.PaymentGateway, o.PaymentMethod, o.PaymentChannel, o.QRURL, o.PaymentStatus, o.FulfillmentStatus,
 		o.WarrantyInfo, o.CustomerContact, o.CustomerEmail, o.CostAtCheckoutUSD, o.VoucherCode, o.DiscountIDR, o.ExpiresAt,
 	)
 	if err != nil {
@@ -59,7 +69,7 @@ func (r *OrderRepository) GetOrderByInvoice(invoice string) (*models.Order, erro
 		SELECT
 			id, invoice_number, claim_code, product_slug, product_name, product_type,
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
-			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
+			total_amount, gateway_order_id, payment_gateway, payment_method, payment_channel, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
 			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
 			voucher_code, discount_idr, paid_at, expires_at, created_at, updated_at
@@ -74,7 +84,7 @@ func (r *OrderRepository) GetOrderByClaimCode(claimCode string) (*models.Order, 
 		SELECT
 			id, invoice_number, claim_code, product_slug, product_name, product_type,
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
-			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
+			total_amount, gateway_order_id, payment_gateway, payment_method, payment_channel, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
 			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
 			voucher_code, discount_idr, paid_at, expires_at, created_at, updated_at
@@ -89,7 +99,7 @@ func (r *OrderRepository) GetOrderByGatewayOrderID(gwID string) (*models.Order, 
 		SELECT
 			id, invoice_number, claim_code, product_slug, product_name, product_type,
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
-			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
+			total_amount, gateway_order_id, payment_gateway, payment_method, payment_channel, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
 			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
 			voucher_code, discount_idr, paid_at, expires_at, created_at, updated_at
@@ -160,7 +170,7 @@ func (r *OrderRepository) ListOrders(limit, offset int, statusFilter string) ([]
 		SELECT
 			id, invoice_number, claim_code, product_slug, product_name, product_type,
 			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
-			total_amount, gateway_order_id, qr_url, payment_status, fulfillment_status,
+			total_amount, gateway_order_id, payment_gateway, payment_method, payment_channel, qr_url, payment_status, fulfillment_status,
 			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
 			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
 			voucher_code, discount_idr, paid_at, expires_at, created_at, updated_at
@@ -237,7 +247,7 @@ func scanOrder(row *sql.Row) (*models.Order, error) {
 	err := row.Scan(
 		&o.ID, &o.InvoiceNumber, &o.ClaimCode, &o.ProductSlug, &o.ProductName, &o.ProductType,
 		&o.Quantity, &o.BasePriceUSD, &o.SellPriceIDR, &o.OriginalAmount, &o.UniqueCode,
-		&o.TotalAmount, &o.GatewayOrderID, &o.QRURL, &o.PaymentStatus, &o.FulfillmentStatus,
+		&o.TotalAmount, &o.GatewayOrderID, &o.PaymentGateway, &o.PaymentMethod, &o.PaymentChannel, &o.QRURL, &o.PaymentStatus, &o.FulfillmentStatus,
 		&o.FulfillmentError, &o.DigitalCoreOrderID, &o.DigitalCoreViewURL, &o.DeliveredItems,
 		&o.WarrantyInfo, &o.CustomerContact, &o.CustomerEmail, &o.CostAtCheckoutUSD, &o.CostAtFulfillmentUSD,
 		&o.VoucherCode, &o.DiscountIDR, &o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,
@@ -253,7 +263,7 @@ func scanOrderRows(rows *sql.Rows) (*models.Order, error) {
 	err := rows.Scan(
 		&o.ID, &o.InvoiceNumber, &o.ClaimCode, &o.ProductSlug, &o.ProductName, &o.ProductType,
 		&o.Quantity, &o.BasePriceUSD, &o.SellPriceIDR, &o.OriginalAmount, &o.UniqueCode,
-		&o.TotalAmount, &o.GatewayOrderID, &o.QRURL, &o.PaymentStatus, &o.FulfillmentStatus,
+		&o.TotalAmount, &o.GatewayOrderID, &o.PaymentGateway, &o.PaymentMethod, &o.PaymentChannel, &o.QRURL, &o.PaymentStatus, &o.FulfillmentStatus,
 		&o.FulfillmentError, &o.DigitalCoreOrderID, &o.DigitalCoreViewURL, &o.DeliveredItems,
 		&o.WarrantyInfo, &o.CustomerContact, &o.CustomerEmail, &o.CostAtCheckoutUSD, &o.CostAtFulfillmentUSD,
 		&o.VoucherCode, &o.DiscountIDR, &o.PaidAt, &o.ExpiresAt, &o.CreatedAt, &o.UpdatedAt,

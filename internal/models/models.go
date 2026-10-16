@@ -17,6 +17,9 @@ type Order struct {
 	UniqueCode          int        `json:"unique_code"`
 	TotalAmount         int64      `json:"total_amount"`
 	GatewayOrderID      string     `json:"gateway_order_id"`
+	PaymentGateway      string     `json:"payment_gateway"` // e.g. PAYMENTG, TRIPAY, MIDTRANS
+	PaymentMethod       string     `json:"payment_method"`  // e.g. QRIS, VIRTUAL_ACCOUNT, EWALLET
+	PaymentChannel      string     `json:"payment_channel"` // e.g. SHOPEEPAY, BCA, GOPAY
 	QRURL               string     `json:"qr_url"`
 	PaymentStatus       string     `json:"payment_status"`     // PENDING, PAID, EXPIRED, CANCELLED
 	FulfillmentStatus   string     `json:"fulfillment_status"` // PENDING, SUCCESS, FAILED
@@ -318,6 +321,9 @@ type CheckoutRequest struct {
 	CustomerEmail   string `json:"customer_email"`
 	CustomerContact string `json:"customer_contact"`
 	VoucherCode     string `json:"voucher_code,omitempty"`
+	PaymentGateway  string `json:"payment_gateway,omitempty"`
+	PaymentMethod   string `json:"payment_method,omitempty"`
+	PaymentChannel  string `json:"payment_channel,omitempty"`
 }
 
 // CheckoutResponse returned to buyer
@@ -332,6 +338,9 @@ type CheckoutResponse struct {
 	VoucherCode      string `json:"voucher_code,omitempty"`
 	DiscountIDR      int64  `json:"discount_idr,omitempty"`
 	GatewayOrderID   string `json:"gateway_order_id"`
+	PaymentGateway   string `json:"payment_gateway,omitempty"`
+	PaymentMethod    string `json:"payment_method,omitempty"`
+	PaymentChannel   string `json:"payment_channel,omitempty"`
 	QRURL            string `json:"qr_url"`
 	ExpiresAt        string `json:"expires_at"`
 	ExpiresInSeconds int    `json:"expires_in_seconds"`
@@ -346,6 +355,9 @@ type OrderStatusResponse struct {
 	Quantity            int      `json:"quantity"`
 	TotalAmount         int64    `json:"total_amount"`
 	PaymentStatus       string   `json:"payment_status"`
+	PaymentGateway      string   `json:"payment_gateway,omitempty"`
+	PaymentMethod       string   `json:"payment_method,omitempty"`
+	PaymentChannel      string   `json:"payment_channel,omitempty"`
 	FulfillmentStatus   string   `json:"fulfillment_status"`
 	QRURL               string   `json:"qr_url"`
 	DeliveredItems      []string `json:"delivered_items,omitempty"`

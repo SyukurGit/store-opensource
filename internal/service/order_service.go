@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"storeku/internal/models"
+	"storeku/internal/payment"
+	"storeku/internal/payment/paymentg"
 	"storeku/internal/provider"
 	"storeku/internal/repository"
 )
@@ -22,6 +24,7 @@ type OrderService struct {
 	pricing          *PricingService
 	dcClient         *DigitalCoreClient
 	pgClient         *PaymentGClient
+	paymentRegistry  *payment.Registry
 	resendService    *ResendService
 	voucherService   *VoucherService
 	localProductRepo *repository.LocalProductRepository
@@ -44,6 +47,27 @@ func NewOrderService(
 		pgClient:      pgClient,
 		resendService: resendService,
 	}
+}
+
+func (s *OrderService) SetPaymentRegistry(pr *payment.Registry) {
+	s.paymentRegistry = pr
+}
+
+func (s *OrderService) getPaymentGateway(gwID string) (payment.Gateway, error) {
+	if s.paymentRegistry != nil {
+		if gwID != "" {
+			if gw, ok := s.paymentRegistry.Get(gwID); ok {
+				return gw, nil
+			}
+		}
+		if def, err := s.paymentRegistry.Default(); err == nil {
+			return def, nil
+		}
+	}
+	if s.pgClient != nil {
+		return paymentg.NewAdapterWithClient(s.pgClient.Config(), s.pgClient.Client()), nil
+	}
+	return nil, fmt.Errorf("tidak ada gateway pembayaran yang terkonfigurasi")
 }
 
 func (s *OrderService) SetVoucherService(vs *VoucherService) {
@@ -217,24 +241,43 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	invoiceNumber := fmt.Sprintf("INV-%s-%s", datePrefix, generateRandomString(6))
 	claimCode := fmt.Sprintf("CLM-%s", generateRandomString(6))
 
-	// 4. Request QRIS tagihan from PaymentG
-	metadata := fmt.Sprintf("Digimest: %s (Qty: %d)", targetProduct.Name, req.Quantity)
-	pgOrder, err := s.pgClient.CreateQRISOrder(invoiceNumber, subtotalIDR, metadata)
+	// 4. Request payment invoice from active gateway (PaymentG or multi-payment)
+	gw, err := s.getPaymentGateway(req.PaymentGateway)
 	if err != nil {
-		// Revert voucher usage only if network gateway failure prevented QRIS generation entirely
 		if voucherClaimed && s.voucherService != nil {
 			_ = s.voucherService.RevertVoucherUsage(appliedVoucherCode)
 		}
-		return nil, fmt.Errorf("gagal membuat tagihan QRIS PaymentG: %w", err)
+		return nil, fmt.Errorf("gateway pembayaran tidak tersedia: %w", err)
 	}
 
-	var expiresAtTime *time.Time
-	if pgOrder.ExpiresAt != "" {
-		if t, err := time.Parse(time.RFC3339, pgOrder.ExpiresAt); err == nil {
-			tUTC := t.UTC()
-			expiresAtTime = &tUTC
-		}
+	metadata := fmt.Sprintf("Digimest: %s (Qty: %d)", targetProduct.Name, req.Quantity)
+	payReq := &payment.CreatePaymentRequest{
+		InvoiceNumber:   invoiceNumber,
+		Amount:          subtotalIDR,
+		ExpiryMinutes:   15,
+		CustomerEmail:   req.CustomerEmail,
+		CustomerContact: req.CustomerContact,
+		Metadata:        metadata,
+		Method:          payment.MethodQRIS,
+		Channel:         "SHOPEEPAY",
 	}
+	if req.PaymentMethod != "" {
+		payReq.Method = payment.Method(req.PaymentMethod)
+	}
+	if req.PaymentChannel != "" {
+		payReq.Channel = req.PaymentChannel
+	}
+
+	payResp, err := gw.CreatePayment(context.Background(), payReq)
+	if err != nil {
+		// Revert voucher usage only if network gateway failure prevented payment generation entirely
+		if voucherClaimed && s.voucherService != nil {
+			_ = s.voucherService.RevertVoucherUsage(appliedVoucherCode)
+		}
+		return nil, fmt.Errorf("gagal membuat tagihan pembayaran (%s): %w", gw.Name(), err)
+	}
+
+	expiresAtTime := payResp.ExpiresAt
 	if expiresAtTime == nil {
 		t := time.Now().UTC().Add(15 * time.Minute)
 		expiresAtTime = &t
@@ -250,13 +293,16 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		Quantity:          req.Quantity,
 		BasePriceUSD:      unitPriceUSD,
 		SellPriceIDR:      unitPriceIDR,
-		OriginalAmount:    pgOrder.OriginalAmount,
-		UniqueCode:        pgOrder.UniqueCode,
-		TotalAmount:       pgOrder.TotalAmount,
+		OriginalAmount:    payResp.OriginalAmount,
+		UniqueCode:        payResp.UniqueCode,
+		TotalAmount:       payResp.TotalAmount,
 		VoucherCode:       appliedVoucherCode,
 		DiscountIDR:       discountIDR,
-		GatewayOrderID:    pgOrder.OrderID,
-		QRURL:             pgOrder.QRURL,
+		GatewayOrderID:    payResp.GatewayOrderID,
+		PaymentGateway:    gw.ID(),
+		PaymentMethod:     string(payResp.Method),
+		PaymentChannel:    payResp.Channel,
+		QRURL:             payResp.QRURL,
 		PaymentStatus:     "PENDING",
 		FulfillmentStatus: "PENDING",
 		WarrantyInfo:      targetProduct.Warranty,
@@ -275,15 +321,18 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		ClaimCode:        "", // Jangan bocorkan kode klaim sebelum lunas
 		ProductName:      targetProduct.Name,
 		Quantity:         req.Quantity,
-		OriginalAmount:   pgOrder.OriginalAmount,
-		UniqueCode:       pgOrder.UniqueCode,
-		TotalAmount:      pgOrder.TotalAmount,
+		OriginalAmount:   payResp.OriginalAmount,
+		UniqueCode:       payResp.UniqueCode,
+		TotalAmount:      payResp.TotalAmount,
 		VoucherCode:      appliedVoucherCode,
 		DiscountIDR:      discountIDR,
-		GatewayOrderID:   pgOrder.OrderID,
-		QRURL:            pgOrder.QRURL,
+		GatewayOrderID:   payResp.GatewayOrderID,
+		PaymentGateway:   gw.ID(),
+		PaymentMethod:    string(payResp.Method),
+		PaymentChannel:   payResp.Channel,
+		QRURL:            payResp.QRURL,
 		ExpiresAt:        expiresAtTime.Format(time.RFC3339),
-		ExpiresInSeconds: pgOrder.ExpiresInSeconds,
+		ExpiresInSeconds: payResp.ExpiresInSeconds,
 	}, nil
 }
 
@@ -318,6 +367,9 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 		ProductType:       order.ProductType,
 		Quantity:          order.Quantity,
 		TotalAmount:       order.TotalAmount,
+		PaymentGateway:    order.PaymentGateway,
+		PaymentMethod:     order.PaymentMethod,
+		PaymentChannel:    order.PaymentChannel,
 		PaymentStatus:     order.PaymentStatus,
 		FulfillmentStatus: order.FulfillmentStatus,
 		QRURL:             order.QRURL,
@@ -369,7 +421,7 @@ func (s *OrderService) CancelOrder(invoice string) error {
 	return s.orderRepo.UpdatePaymentStatus(order.InvoiceNumber, "CANCELLED", nil)
 }
 
-// TriggerInstantCheck triggers immediate mutation check on PaymentG and updates if paid
+// TriggerInstantCheck triggers immediate check on payment gateway and updates if paid
 func (s *OrderService) TriggerInstantCheck(invoice string) error {
 	order, err := s.orderRepo.GetOrderByInvoice(invoice)
 	if err != nil {
@@ -384,17 +436,24 @@ func (s *OrderService) TriggerInstantCheck(invoice string) error {
 		return fmt.Errorf("order belum memiliki gateway_order_id")
 	}
 
-	// 1. Call PaymentG check mutation
-	_ = s.pgClient.TriggerInstantMutationCheck(order.GatewayOrderID)
+	gw, err := s.getPaymentGateway(order.PaymentGateway)
+	if err != nil {
+		return fmt.Errorf("gateway pembayaran '%s' tidak ditemukan: %w", order.PaymentGateway, err)
+	}
 
-	// 2. Query PaymentG order status
-	pgOrder, err := s.pgClient.CheckOrderStatus(order.GatewayOrderID)
+	ctx := context.Background()
+
+	// 1. Call instant mutation trigger on the gateway (if supported)
+	_ = gw.TriggerInstantCheck(ctx, order.GatewayOrderID)
+
+	// 2. Query gateway order status
+	statusResp, err := gw.CheckStatus(ctx, order.GatewayOrderID)
 	if err != nil {
 		return err
 	}
 
-	if pgOrder.Status == "PAID" {
-		return s.ProcessPaymentSuccess(order.InvoiceNumber, pgOrder.ShopeeTxID)
+	if statusResp != nil && statusResp.Status == "PAID" {
+		return s.ProcessPaymentSuccess(order.InvoiceNumber, statusResp.TransactionID)
 	}
 
 	return nil

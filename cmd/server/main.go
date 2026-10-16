@@ -15,6 +15,8 @@ import (
 	"storeku/internal/config"
 	"storeku/internal/database"
 	"storeku/internal/handler"
+	"storeku/internal/payment"
+	"storeku/internal/payment/paymentg"
 	"storeku/internal/provider"
 	"storeku/internal/provider/digitalcore"
 	"storeku/internal/provider/local"
@@ -63,11 +65,19 @@ func main() {
 	pgClient := service.NewPaymentGClient(cfg)
 	resendService := service.NewResendService(cfg)
 	voucherService := service.NewVoucherService(cfg, voucherRepo)
+
+	// Payment Gateway Registry (Multi-Payment Ready)
+	paymentRegistry := payment.NewRegistry()
+	paymentGAdapter := paymentg.NewAdapter(cfg)
+	paymentRegistry.Register(paymentGAdapter)
+	paymentRegistry.SetDefault("PAYMENTG")
+
 	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
 	orderService.SetVoucherService(voucherService)
 	orderService.SetLocalProductRepo(localProductRepo)
 	orderService.SetProviderRegistry(providerRegistry)
 	orderService.SetCatalogService(catalogService)
+	orderService.SetPaymentRegistry(paymentRegistry)
 
 	// 6. Initialize Handlers
 	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService, settingRepo)
@@ -76,6 +86,7 @@ func main() {
 	publicHandler.SetReviewRepo(reviewRepo)
 	publicHandler.SetCatalogService(catalogService)
 	webhookHandler := handler.NewWebhookHandler(orderService, pgClient, orderRepo)
+	webhookHandler.SetPaymentRegistry(paymentRegistry)
 	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, adminLoginRepo, dcClient, orderService)
 	adminHandler.SetVoucherService(voucherService)
 	adminHandler.SetMaintenanceRepo(maintenanceRepo)
@@ -122,8 +133,9 @@ func main() {
 		r.Post("/orders/{invoice}/cancel", publicHandler.CancelOrder)
 		r.Get("/claim", publicHandler.ClaimProduct)
 
-		// PaymentG Webhook Receiver
+		// Payment Gateways Webhook Receivers (Legacy & Unified Multi-Payment)
 		r.Post("/webhook/paymentg", webhookHandler.HandlePaymentGWebhook)
+		r.Post("/webhook/{gateway}", webhookHandler.HandleGatewayWebhook)
 
 		// Admin Auth
 		r.Post("/admin/login", adminHandler.Login)

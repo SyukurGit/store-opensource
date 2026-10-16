@@ -564,6 +564,15 @@ func (h *PublicHandler) TriggerCheck(w http.ResponseWriter, r *http.Request) {
 
 	// Throttling: Maksimal 1 call per 4 detik per invoice agar tidak membanjiri gateway & server
 	h.checkMu.Lock()
+	// Periodic pruning of throttle cache to avoid unbounded memory growth under high traffic
+	if len(h.lastCheckTimes) > 500 {
+		cutoff := time.Now().Add(-10 * time.Minute)
+		for inv, t := range h.lastCheckTimes {
+			if t.Before(cutoff) {
+				delete(h.lastCheckTimes, inv)
+			}
+		}
+	}
 	lastCheck, exists := h.lastCheckTimes[invoice]
 	now := time.Now()
 	if exists && now.Sub(lastCheck) < 4*time.Second {
