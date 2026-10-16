@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"storeku/internal/models"
+	"storeku/internal/provider"
 	"storeku/internal/repository"
 )
 
@@ -23,6 +25,8 @@ type OrderService struct {
 	resendService    *ResendService
 	voucherService   *VoucherService
 	localProductRepo *repository.LocalProductRepository
+	providerRegistry *provider.Registry
+	catalogService   *CatalogService
 	locks            sync.Map // invoice string -> *sync.Mutex
 }
 
@@ -48,6 +52,14 @@ func (s *OrderService) SetVoucherService(vs *VoucherService) {
 
 func (s *OrderService) SetLocalProductRepo(lpr *repository.LocalProductRepository) {
 	s.localProductRepo = lpr
+}
+
+func (s *OrderService) SetProviderRegistry(pr *provider.Registry) {
+	s.providerRegistry = pr
+}
+
+func (s *OrderService) SetCatalogService(cs *CatalogService) {
+	s.catalogService = cs
 }
 
 // GetOrderByInvoice retrieves an order by its invoice number
@@ -86,22 +98,23 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 
 	// 1. Fetch live product catalog to ensure valid stock and real-time pricing
 	var targetProduct *models.Product
-	if s.localProductRepo != nil {
+	if s.catalogService != nil {
+		targetProduct, _ = s.catalogService.GetPublicProductBySlug(context.Background(), req.ProductSlug, "id")
+	}
+
+	if targetProduct == nil && s.localProductRepo != nil {
 		if lp, err := s.localProductRepo.GetBySlug(req.ProductSlug); err == nil && lp != nil && lp.IsActive {
 			targetProduct = lp.ToProduct()
 		}
 	}
 
-	if targetProduct == nil {
-		products, err := s.dcClient.FetchProducts()
-		if err != nil {
-			return nil, fmt.Errorf("gagal memuat katalog produk: %w", err)
-		}
-
-		for _, p := range products {
-			if p.Slug == req.ProductSlug {
-				targetProduct = p
-				break
+	if targetProduct == nil && s.dcClient != nil {
+		if products, err := s.dcClient.FetchProducts(); err == nil {
+			for _, p := range products {
+				if p.Slug == req.ProductSlug {
+					targetProduct = p
+					break
+				}
 			}
 		}
 	}
@@ -420,51 +433,113 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 		}
 	}
 
-	// PRE-FULFILLMENT CHECK: Check live wholesale cost from DigitalCore before buying
-	liveCostUSD, err := s.dcClient.GetProductLiveCost(order.ProductSlug, order.Quantity)
-	if err == nil && liveCostUSD > 0 {
-		rate := s.pricing.GetUSDRate()
-		minMarginPct := s.pricing.GetMarginPercent()
-		liveTotalCostIDR := int64(math.Ceil(liveCostUSD * rate * float64(order.Quantity)))
+	// MULTI-PROVIDER FULFILLMENT: Check if provider registry is available
+	if s.providerRegistry != nil {
+		provID := "DIGITALCORE"
+		if prov, ok := s.providerRegistry.Get(provID); ok {
+			ctx := context.Background()
 
-		// 1. Minimum Revenue requirement: ensure default profit margin (e.g. 25%)
-		minSafeRevenueIDR := int64(math.Ceil(float64(liveTotalCostIDR) * (1.0 + (minMarginPct / 100.0))))
+			// PRE-FULFILLMENT CHECK: Check live wholesale cost from provider before buying
+			liveCostUSD, err := prov.GetLiveCost(ctx, order.ProductSlug, order.Quantity)
+			if err == nil && liveCostUSD > 0 {
+				rate := s.pricing.GetUSDRate()
+				minMarginPct := s.pricing.GetMarginPercent()
+				liveTotalCostIDR := int64(math.Ceil(liveCostUSD * rate * float64(order.Quantity)))
 
-		// If new wholesale cost exceeds what buyer paid OR dips below safe margin: HALT! Protect bot balance & profit!
-		if liveTotalCostIDR > order.TotalAmount || order.TotalAmount < minSafeRevenueIDR {
-			errMsg := fmt.Sprintf("Lonjakan harga API upstream: modal naik menjadi Rp %d (keuntungan aman minimal Rp %d, uang bayar Rp %d). Pembelian otomatis ditahan demi perlindungan saldo bot.", liveTotalCostIDR, minSafeRevenueIDR, order.TotalAmount)
-			log.Printf("[AUTO-HOLD PRICE SPIKE] %s: %s", invoice, errMsg)
-			_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_PRICE_SPIKE", errMsg, "", "", "[]")
-			return nil // SALDO BOT & KEUNTUNGAN AMAN!
-		}
+				minSafeRevenueIDR := int64(math.Ceil(float64(liveTotalCostIDR) * (1.0 + (minMarginPct / 100.0))))
+				if liveTotalCostIDR > order.TotalAmount || order.TotalAmount < minSafeRevenueIDR {
+					errMsg := fmt.Sprintf("Lonjakan harga API upstream: modal naik menjadi Rp %d (keuntungan aman minimal Rp %d, uang bayar Rp %d). Pembelian otomatis ditahan demi perlindungan saldo bot.", liveTotalCostIDR, minSafeRevenueIDR, order.TotalAmount)
+					log.Printf("[AUTO-HOLD PRICE SPIKE] %s: %s", invoice, errMsg)
+					_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_PRICE_SPIKE", errMsg, "", "", "[]")
+					return nil
+				}
 
-		// 2. Pre-check Telegram bot balance before buying
-		reqUSD := liveCostUSD * float64(order.Quantity)
-		if me, err := s.dcClient.GetUserAccount(); err == nil && me != nil {
-			if me.Balance < reqUSD {
-				errMsg := fmt.Sprintf("Saldo bot DigitalCore ($%.2f) tidak mencukupi untuk pesanan ini ($%.2f). Pembelian otomatis ditahan untuk top-up saldo bot.", me.Balance, reqUSD)
-				log.Printf("[HOLD INSUFFICIENT BOT BALANCE] %s: %s", invoice, errMsg)
-				_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_INSUFFICIENT_BOT_BALANCE", errMsg, "", "", "[]")
+				reqUSD := liveCostUSD * float64(order.Quantity)
+				if health, err := prov.CheckHealth(ctx); err == nil && health != nil && health.Configured {
+					if health.Currency == "USD" && health.Balance < reqUSD {
+						errMsg := fmt.Sprintf("Saldo bot %s ($%.2f) tidak mencukupi untuk pesanan ini ($%.2f). Pembelian otomatis ditahan untuk top-up saldo bot.", prov.Name(), health.Balance, reqUSD)
+						log.Printf("[HOLD INSUFFICIENT BOT BALANCE] %s: %s", invoice, errMsg)
+						_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_INSUFFICIENT_BOT_BALANCE", errMsg, "", "", "[]")
+						return nil
+					}
+				}
+			}
+
+			log.Printf("[FULFILLMENT] Initiating auto-buy for %s via %s (Product: %s, Qty: %d)...", invoice, prov.Name(), order.ProductSlug, order.Quantity)
+			fulReq := &provider.FulfillmentRequest{
+				InvoiceNumber:   order.InvoiceNumber,
+				ProductSlug:     order.ProductSlug,
+				Quantity:        order.Quantity,
+				CustomerEmail:   order.CustomerEmail,
+				CustomerContact: order.CustomerContact,
+				TotalAmountIDR:  order.TotalAmount,
+			}
+			fulRes, err := prov.Fulfill(ctx, fulReq)
+			if err != nil {
+				log.Printf("[FULFILLMENT ERROR] Order %s failed to buy from %s: %v", invoice, prov.Name(), err)
+				_ = s.orderRepo.UpdateFulfillment(invoice, "FAILED", err.Error(), "", "", "[]")
 				return nil
 			}
+
+			itemsJSON, _ := json.Marshal(fulRes.DeliveredItems)
+			costUSD := liveCostUSD
+			if fulRes.WholesaleCostUSD > 0 {
+				costUSD = fulRes.WholesaleCostUSD
+			}
+			if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", fulRes.ProviderOrderID, fulRes.ProviderViewURL, string(itemsJSON), costUSD); err != nil {
+				log.Printf("Error updating fulfillment record for %s: %v", invoice, err)
+			}
+
+			log.Printf("[FULFILLMENT SUCCESS] Order %s fulfilled with %d item(s). Provider Order ID: %s", invoice, len(fulRes.DeliveredItems), fulRes.ProviderOrderID)
+			return nil
 		}
 	}
 
-	// EXECUTE INSTANT AUTO-FULFILLMENT TO DIGITALCORE
-	log.Printf("[FULFILLMENT] Initiating auto-buy for %s (Product: %s, Qty: %d)...", invoice, order.ProductSlug, order.Quantity)
-	buyResp, err := s.dcClient.BuyProduct(order.ProductSlug, order.Quantity)
-	if err != nil {
-		log.Printf("[FULFILLMENT ERROR] Order %s failed to buy from DigitalCore: %v", invoice, err)
-		_ = s.orderRepo.UpdateFulfillment(invoice, "FAILED", err.Error(), "", "", "[]")
+	// LEGACY FALLBACK: Check live wholesale cost from DigitalCore before buying
+	if s.dcClient != nil {
+		liveCostUSD, err := s.dcClient.GetProductLiveCost(order.ProductSlug, order.Quantity)
+		if err == nil && liveCostUSD > 0 {
+			rate := s.pricing.GetUSDRate()
+			minMarginPct := s.pricing.GetMarginPercent()
+			liveTotalCostIDR := int64(math.Ceil(liveCostUSD * rate * float64(order.Quantity)))
+
+			minSafeRevenueIDR := int64(math.Ceil(float64(liveTotalCostIDR) * (1.0 + (minMarginPct / 100.0))))
+
+			if liveTotalCostIDR > order.TotalAmount || order.TotalAmount < minSafeRevenueIDR {
+				errMsg := fmt.Sprintf("Lonjakan harga API upstream: modal naik menjadi Rp %d (keuntungan aman minimal Rp %d, uang bayar Rp %d). Pembelian otomatis ditahan demi perlindungan saldo bot.", liveTotalCostIDR, minSafeRevenueIDR, order.TotalAmount)
+				log.Printf("[AUTO-HOLD PRICE SPIKE] %s: %s", invoice, errMsg)
+				_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_PRICE_SPIKE", errMsg, "", "", "[]")
+				return nil
+			}
+
+			reqUSD := liveCostUSD * float64(order.Quantity)
+			if me, err := s.dcClient.GetUserAccount(); err == nil && me != nil {
+				if me.Balance < reqUSD {
+					errMsg := fmt.Sprintf("Saldo bot DigitalCore ($%.2f) tidak mencukupi untuk pesanan ini ($%.2f). Pembelian otomatis ditahan untuk top-up saldo bot.", me.Balance, reqUSD)
+					log.Printf("[HOLD INSUFFICIENT BOT BALANCE] %s: %s", invoice, errMsg)
+					_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_INSUFFICIENT_BOT_BALANCE", errMsg, "", "", "[]")
+					return nil
+				}
+			}
+		}
+
+		log.Printf("[FULFILLMENT] Initiating auto-buy for %s (Product: %s, Qty: %d)...", invoice, order.ProductSlug, order.Quantity)
+		buyResp, err := s.dcClient.BuyProduct(order.ProductSlug, order.Quantity)
+		if err != nil {
+			log.Printf("[FULFILLMENT ERROR] Order %s failed to buy from DigitalCore: %v", invoice, err)
+			_ = s.orderRepo.UpdateFulfillment(invoice, "FAILED", err.Error(), "", "", "[]")
+			return nil
+		}
+
+		itemsJSON, _ := json.Marshal(buyResp.Items)
+		if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", buyResp.OrderID, buyResp.ViewURL, string(itemsJSON), liveCostUSD); err != nil {
+			log.Printf("Error updating fulfillment record for %s: %v", invoice, err)
+		}
+
+		log.Printf("[FULFILLMENT SUCCESS] Order %s fulfilled with %d item(s). DC Order ID: %s", invoice, len(buyResp.Items), buyResp.OrderID)
 		return nil
 	}
 
-	itemsJSON, _ := json.Marshal(buyResp.Items)
-	if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", buyResp.OrderID, buyResp.ViewURL, string(itemsJSON), liveCostUSD); err != nil {
-		log.Printf("Error updating fulfillment record for %s: %v", invoice, err)
-	}
-
-	log.Printf("[FULFILLMENT SUCCESS] Order %s fulfilled with %d item(s). DC Order ID: %s", invoice, len(buyResp.Items), buyResp.OrderID)
 	return nil
 }
 
@@ -492,19 +567,47 @@ func (s *OrderService) ForceFulfillOrder(invoice string) error {
 		return fmt.Errorf("pesanan sudah berstatus %s, tidak dapat dipenuhi", order.FulfillmentStatus)
 	}
 
-	log.Printf("[FORCE FULFILL] Admin forced buy for %s (Product: %s, Qty: %d)...", invoice, order.ProductSlug, order.Quantity)
-	buyResp, err := s.dcClient.BuyProduct(order.ProductSlug, order.Quantity)
-	if err != nil {
-		_ = s.orderRepo.UpdateFulfillment(invoice, "FAILED", err.Error(), "", "", "[]")
-		return fmt.Errorf("gagal memenuhi stok dari DigitalCore: %w", err)
+	if s.providerRegistry != nil {
+		if prov, ok := s.providerRegistry.Get("DIGITALCORE"); ok {
+			log.Printf("[FORCE FULFILL] Admin forced buy for %s via provider %s...", invoice, prov.Name())
+			fulReq := &provider.FulfillmentRequest{
+				InvoiceNumber:   order.InvoiceNumber,
+				ProductSlug:     order.ProductSlug,
+				Quantity:        order.Quantity,
+				CustomerEmail:   order.CustomerEmail,
+				CustomerContact: order.CustomerContact,
+				TotalAmountIDR:  order.TotalAmount,
+			}
+			fulRes, err := prov.Fulfill(context.Background(), fulReq)
+			if err != nil {
+				_ = s.orderRepo.UpdateFulfillment(invoice, "FAILED", err.Error(), "", "", "[]")
+				return fmt.Errorf("gagal memenuhi stok dari %s: %w", prov.Name(), err)
+			}
+
+			itemsJSON, _ := json.Marshal(fulRes.DeliveredItems)
+			if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", fulRes.ProviderOrderID, fulRes.ProviderViewURL, string(itemsJSON), 0); err != nil {
+				return err
+			}
+			return nil
+		}
 	}
 
-	itemsJSON, _ := json.Marshal(buyResp.Items)
-	if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", buyResp.OrderID, buyResp.ViewURL, string(itemsJSON), 0); err != nil {
-		return err
+	if s.dcClient != nil {
+		log.Printf("[FORCE FULFILL] Admin forced buy for %s (Product: %s, Qty: %d)...", invoice, order.ProductSlug, order.Quantity)
+		buyResp, err := s.dcClient.BuyProduct(order.ProductSlug, order.Quantity)
+		if err != nil {
+			_ = s.orderRepo.UpdateFulfillment(invoice, "FAILED", err.Error(), "", "", "[]")
+			return fmt.Errorf("gagal memenuhi stok dari DigitalCore: %w", err)
+		}
+
+		itemsJSON, _ := json.Marshal(buyResp.Items)
+		if err := s.orderRepo.UpdateFulfillmentWithCost(invoice, "SUCCESS", "", buyResp.OrderID, buyResp.ViewURL, string(itemsJSON), 0); err != nil {
+			return err
+		}
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("tidak ada provider pemenuhan yang tersedia")
 }
 
 // ManualMarkPaidAndFulfill allows admin to confirm manual transfer without unique code and instantly fulfill

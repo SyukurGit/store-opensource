@@ -26,6 +26,7 @@ type PublicHandler struct {
 	localProductRepo *repository.LocalProductRepository
 	voucherService   *service.VoucherService
 	reviewRepo       *repository.ReviewRepository
+	catalogService   *service.CatalogService
 	lastCheckTimes   map[string]time.Time
 	checkMu          sync.Mutex
 }
@@ -50,6 +51,10 @@ func (h *PublicHandler) SetLocalProductRepo(repo *repository.LocalProductReposit
 
 func (h *PublicHandler) SetReviewRepo(repo *repository.ReviewRepository) {
 	h.reviewRepo = repo
+}
+
+func (h *PublicHandler) SetCatalogService(cs *service.CatalogService) {
+	h.catalogService = cs
 }
 
 // HealthCheck handles GET /health and GET /api/health
@@ -84,6 +89,19 @@ func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 
 // GetProducts handles GET /api/products
 func (h *PublicHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
+	lang := r.URL.Query().Get("lang")
+
+	// 0. If CatalogService is initialized, use the multi-provider aggregated catalog
+	if h.catalogService != nil {
+		if prods, err := h.catalogService.GetPublicProducts(r.Context(), lang); err == nil && len(prods) > 0 {
+			sendJSON(w, http.StatusOK, map[string]interface{}{
+				"success": true,
+				"data":    prods,
+			})
+			return
+		}
+	}
+
 	var localProducts []*models.Product
 	if h.localProductRepo != nil {
 		if lps, err := h.localProductRepo.GetAllActive(); err == nil {
@@ -186,7 +204,6 @@ func (h *PublicHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
 		return false
 	})
 
-	lang := r.URL.Query().Get("lang")
 	for _, p := range merged {
 		applyLanguageToProduct(p, lang)
 	}
@@ -232,6 +249,33 @@ func (h *PublicHandler) GetProductDetail(w http.ResponseWriter, r *http.Request)
 			"error":   "Slug produk tidak boleh kosong",
 		})
 		return
+	}
+
+	lang := r.URL.Query().Get("lang")
+
+	// 0. If CatalogService is available, query centralized multi-provider catalog
+	if h.catalogService != nil {
+		if p, err := h.catalogService.GetPublicProductBySlug(r.Context(), slug, lang); err == nil && p != nil {
+			var stats *models.ReviewStats
+			var reviews []*models.ProductReview
+			if h.reviewRepo != nil {
+				if st, err := h.reviewRepo.GetStatsByProductSlug(p.Slug); err == nil && st != nil {
+					stats = st
+					p.RatingAvg = st.AverageRating
+					p.RatingCount = st.TotalReviews
+				}
+				if revs, err := h.reviewRepo.GetByProductSlug(p.Slug, true, 50, 0); err == nil && revs != nil {
+					reviews = revs
+				}
+			}
+			sendJSON(w, http.StatusOK, map[string]interface{}{
+				"success":      true,
+				"data":         p,
+				"reviews":      reviews,
+				"review_stats": stats,
+			})
+			return
+		}
 	}
 
 	var product *models.Product
@@ -304,7 +348,6 @@ func (h *PublicHandler) GetProductDetail(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	lang := r.URL.Query().Get("lang")
 	applyLanguageToProduct(product, lang)
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{

@@ -15,6 +15,9 @@ import (
 	"storeku/internal/config"
 	"storeku/internal/database"
 	"storeku/internal/handler"
+	"storeku/internal/provider"
+	"storeku/internal/provider/digitalcore"
+	"storeku/internal/provider/local"
 	"storeku/internal/repository"
 	"storeku/internal/service"
 )
@@ -41,8 +44,17 @@ func main() {
 	localProductRepo := repository.NewLocalProductRepository(db)
 	reviewRepo := repository.NewReviewRepository(db)
 
-	// 4. Initialize Services
+	// 4. Initialize Multi-Provider Engine & Catalog
 	pricingService := service.NewPricingService(cfg, settingRepo)
+	providerRegistry := provider.NewRegistry()
+	localProvider := local.NewLocalProvider(localProductRepo)
+	dcAdapter := digitalcore.NewAdapter(cfg, pricingService)
+	providerRegistry.Register(localProvider)
+	providerRegistry.Register(dcAdapter)
+
+	catalogService := service.NewCatalogService(providerRegistry, pricingService, overrideRepo, settingRepo, db)
+
+	// 5. Initialize Services
 	dcClient := service.NewDigitalCoreClient(cfg, pricingService, overrideRepo)
 	dcClient.SetDB(db)
 	pgClient := service.NewPaymentGClient(cfg)
@@ -51,18 +63,23 @@ func main() {
 	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
 	orderService.SetVoucherService(voucherService)
 	orderService.SetLocalProductRepo(localProductRepo)
+	orderService.SetProviderRegistry(providerRegistry)
+	orderService.SetCatalogService(catalogService)
 
-	// 5. Initialize Handlers
+	// 6. Initialize Handlers
 	publicHandler := handler.NewPublicHandler(cfg, dcClient, orderService, settingRepo)
 	publicHandler.SetVoucherService(voucherService)
 	publicHandler.SetLocalProductRepo(localProductRepo)
 	publicHandler.SetReviewRepo(reviewRepo)
+	publicHandler.SetCatalogService(catalogService)
 	webhookHandler := handler.NewWebhookHandler(orderService, pgClient, orderRepo)
 	adminHandler := handler.NewAdminHandler(cfg, orderRepo, settingRepo, overrideRepo, adminLoginRepo, dcClient, orderService)
 	adminHandler.SetVoucherService(voucherService)
 	adminHandler.SetMaintenanceRepo(maintenanceRepo)
 	adminHandler.SetLocalProductRepo(localProductRepo)
 	adminHandler.SetReviewRepo(reviewRepo)
+	adminHandler.SetCatalogService(catalogService)
+	adminHandler.SetProviderRegistry(providerRegistry)
 
 	// Background Sweeper: auto-expire orders that passed their 15-minute deadline
 	go func() {
