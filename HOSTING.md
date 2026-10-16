@@ -54,10 +54,11 @@ Jalankan perintah Go cross-compile berikut di terminal root project:
 ```bash
 # Windows PowerShell
 $env:CGO_ENABLED = "0"; $env:GOOS = "linux"; $env:GOARCH = "amd64"
-go build -ldflags="-s -w" -o storeku-linux ./cmd/server
+go build -ldflags="-s -w" -o deploy/storeku-linux ./cmd/server
+$env:GOOS = "windows"
 
 # Atau via bash / Linux:
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o storeku-linux ./cmd/server
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o deploy/storeku-linux ./cmd/server
 ```
 > *Catatan: Binary Go ini menggunakan modernc SQLite (pure Go), tidak memerlukan CGO atau GCC compiler.*
 
@@ -70,9 +71,9 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o storeku-linux
    cd /var/www/digimest
    ```
 2. Upload file berikut dari lokal ke `/var/www/digimest/`:
-   * `storeku-linux` (file binary Go)
+   * `deploy/storeku-linux` (file binary Go)
    * `.env` (file konfigurasi kredensial)
-   * Folder `web/` (jika menggunakan Model 1 Full-Stack)
+   * Folder `web/` (mirror statis yang sudah disinkronkan dari `scratch_fe/`)
 3. Berikan izin eksekusi pada binary:
    ```bash
    chmod +x /var/www/digimest/storeku-linux
