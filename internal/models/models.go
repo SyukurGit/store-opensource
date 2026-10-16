@@ -500,31 +500,44 @@ type DatabaseStats struct {
 
 // DatabaseCleanRequest payload for selective database cleanup
 type DatabaseCleanRequest struct {
-	AdminPassword       string `json:"admin_password"`
-	CleanOrders         bool   `json:"clean_orders"`
-	OrdersMode          string `json:"orders_mode"` // "ALL", "EXPIRED_CANCELLED", "OLDER_THAN"
-	OrdersOlderDays     int    `json:"orders_older_days"`
-	CleanDeliveredKeys  bool   `json:"clean_delivered_keys"`
-	KeysOlderDays       int    `json:"keys_older_days"`
-	CleanLoginLogs      bool   `json:"clean_login_logs"`
-	LogsMode            string `json:"logs_mode"` // "ALL", "FAILED_ONLY", "OLDER_THAN_7_DAYS", "OLDER_THAN_30_DAYS"
-	CleanVouchers       bool   `json:"clean_vouchers"`
-	VouchersMode        string `json:"vouchers_mode"` // "EXPIRED_USED", "ALL"
-	CleanCachedProducts bool   `json:"clean_cached_products"`
-	RunVacuum           bool   `json:"run_vacuum"`
+	AdminPassword              string `json:"admin_password"`
+	CleanOrders                bool   `json:"clean_orders"`
+	OrdersMode                 string `json:"orders_mode"` // "ALL", "EXPIRED_CANCELLED", "OLDER_THAN"
+	OrdersScope                string `json:"orders_scope"` // frontend alias
+	OrdersOlderDays            int    `json:"orders_older_days"`
+	OrdersOlderThanDays        int    `json:"orders_older_than_days"` // frontend alias
+	CleanDeliveredKeys         bool   `json:"clean_delivered_keys"`
+	KeysOlderDays              int    `json:"keys_older_days"`
+	DeliveredKeysOlderThanDays int    `json:"delivered_keys_older_than_days"` // frontend alias
+	CleanLoginLogs             bool   `json:"clean_login_logs"`
+	LogsMode                   string `json:"logs_mode"` // "ALL", "FAILED_ONLY", "OLDER_THAN_7_DAYS", "OLDER_THAN_30_DAYS"
+	LoginLogsScope             string `json:"login_logs_scope"` // frontend alias
+	CleanVouchers              bool   `json:"clean_vouchers"`
+	VouchersMode               string `json:"vouchers_mode"` // "EXPIRED_USED", "ALL"
+	VouchersScope              string `json:"vouchers_scope"` // frontend alias
+	CleanCachedProducts        bool   `json:"clean_cached_products"`
+	RunVacuum                  bool   `json:"run_vacuum"`
+	Vacuum                     bool   `json:"vacuum"` // frontend alias
 }
 
 // DatabaseCleanResult summary returned after database cleanup execution
 type DatabaseCleanResult struct {
-	OrdersDeleted      int64  `json:"orders_deleted"`
-	KeysCleaned        int64  `json:"keys_cleaned"`
-	LogsDeleted        int64  `json:"logs_deleted"`
-	VouchersDeleted    int64  `json:"vouchers_deleted"`
-	CachedCleaned      int64  `json:"cached_cleaned"`
-	VacuumExecuted     bool   `json:"vacuum_executed"`
-	DatabaseSizeBefore string `json:"database_size_before"`
-	DatabaseSizeAfter  string `json:"database_size_after"`
-	Message            string `json:"message"`
+	OrdersDeleted         int64  `json:"orders_deleted"`
+	KeysCleaned           int64  `json:"keys_cleaned"`
+	DeliveredKeysCleared  int64  `json:"delivered_keys_cleared"` // frontend alias
+	LogsDeleted           int64  `json:"logs_deleted"`
+	AdminLogsDeleted      int64  `json:"admin_logs_deleted"` // frontend alias
+	VouchersDeleted       int64  `json:"vouchers_deleted"`
+	CachedCleaned         int64  `json:"cached_cleaned"`
+	CachedProductsDeleted int64  `json:"cached_products_deleted"` // frontend alias
+	VacuumExecuted        bool   `json:"vacuum_executed"`
+	Vacuumed              bool   `json:"vacuumed"` // frontend alias
+	DatabaseSizeBefore    string `json:"database_size_before"`
+	SizeBefore            string `json:"size_before"` // frontend alias
+	DatabaseSizeAfter     string `json:"database_size_after"`
+	SizeAfter             string `json:"size_after"` // frontend alias
+	SpaceFreed            string `json:"space_freed"` // frontend alias
+	Message               string `json:"message"`
 }
 
 // ProductReview represents buyer or admin review

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -159,5 +160,30 @@ func (h *AdminHandler) ManualDeliverKeys(w http.ResponseWriter, r *http.Request)
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Serial key berhasil dikirimkan ke pembeli",
+	})
+}
+
+// DeleteOrder handles DELETE /api/admin/orders/{invoice}
+func (h *AdminHandler) DeleteOrder(w http.ResponseWriter, r *http.Request) {
+	invoice := chi.URLParam(r, "invoice")
+	if invoice == "" {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   "Nomor invoice tidak boleh kosong",
+		})
+		return
+	}
+
+	if err := h.orderRepo.Delete(invoice); err != nil {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Pesanan '%s' berhasil dihapus dari database", invoice),
 	})
 }

@@ -383,3 +383,16 @@ func scanOrderRows(rows *sql.Rows) (*models.Order, error) {
 	}
 	return o, nil
 }
+
+// Delete removes an order from the database by invoice number
+func (r *OrderRepository) Delete(invoice string) error {
+	res, err := r.db.Exec("DELETE FROM orders WHERE invoice_number = ?", invoice)
+	if err != nil {
+		return fmt.Errorf("gagal menghapus pesanan: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("pesanan dengan invoice '%s' tidak ditemukan", invoice)
+	}
+	return nil
+}

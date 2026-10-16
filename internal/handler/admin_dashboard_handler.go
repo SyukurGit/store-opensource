@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"storeku/internal/models"
 )
@@ -171,6 +172,18 @@ func (h *AdminHandler) SaveSettings(w http.ResponseWriter, r *http.Request) {
 		"telegram_cs_username":      true,
 		"digitalcore_enabled":       true,
 		"silvex_enabled":            true,
+	}
+
+	// Safety check: USD/USDT rate cannot be lower than Rp 16.000 to prevent financial loss
+	if rateStr, ok := body["usd_rate"]; ok && strings.TrimSpace(rateStr) != "" {
+		rateVal, err := strconv.ParseFloat(strings.TrimSpace(rateStr), 64)
+		if err != nil || rateVal < 16000.0 {
+			sendJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"error":   "Nilai kurs USD/USDT tidak boleh kurang dari Rp 16.000 untuk keamanan finansial toko",
+			})
+			return
+		}
 	}
 
 	for k, v := range body {

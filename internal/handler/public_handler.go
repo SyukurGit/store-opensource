@@ -92,6 +92,11 @@ func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 		"telegram_username": username,
 		"telegram_url":      fmt.Sprintf("https://t.me/%s", username),
 		"usd_rate":          usdRate,
+		"data": map[string]interface{}{
+			"telegram_username": username,
+			"telegram_url":      fmt.Sprintf("https://t.me/%s", username),
+			"usd_rate":          usdRate,
+		},
 	})
 }
 

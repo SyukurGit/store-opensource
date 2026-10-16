@@ -147,4 +147,68 @@ func TestMaintenanceRepository(t *testing.T) {
 	if resVouchers.VouchersDeleted != 1 {
 		t.Fatalf("expected 1 voucher deleted, got %d", resVouchers.VouchersDeleted)
 	}
+
+	// 9. Test Aliases from frontend (orders_scope, vacuum, size_before, etc.)
+	aliasReq := &models.DatabaseCleanRequest{
+		CleanOrders: true,
+		OrdersScope: "all",
+		Vacuum:      true,
+	}
+	resAlias, err := repo.CleanDatabase(dbPath, aliasReq)
+	if err != nil {
+		t.Fatalf("failed to clean with aliases: %v", err)
+	}
+	if resAlias.OrdersDeleted < 1 {
+		t.Fatalf("expected orders to be deleted with orders_scope='all', got %d", resAlias.OrdersDeleted)
+	}
+	if !resAlias.Vacuumed {
+		t.Fatalf("expected Vacuumed alias to be true")
+	}
+	if resAlias.SizeBefore == "" || resAlias.SizeAfter == "" {
+		t.Fatalf("expected SizeBefore and SizeAfter to be populated")
+	}
+}
+
+func TestOrderRepository_Delete(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test_order_delete.db")
+
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("failed to init test db: %v", err)
+	}
+	defer db.Close()
+
+	orderRepo := NewOrderRepository(db)
+
+	// Insert test order
+	_, err = db.Exec(`
+		INSERT INTO orders (invoice_number, claim_code, product_slug, product_name, quantity, total_amount, payment_status, created_at)
+		VALUES ('INV-TEST-DEL', 'CLM-TEST-DEL', 'prod-del', 'Product Del', 1, 15000, 'PENDING', datetime('now'))
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test order: %v", err)
+	}
+
+	// Verify order exists
+	ord, err := orderRepo.GetOrderByInvoice("INV-TEST-DEL")
+	if err != nil || ord == nil {
+		t.Fatalf("expected order to exist: %v", err)
+	}
+
+	// Delete order
+	if err := orderRepo.Delete("INV-TEST-DEL"); err != nil {
+		t.Fatalf("failed to delete order: %v", err)
+	}
+
+	// Verify order is gone
+	ordAfter, err := orderRepo.GetOrderByInvoice("INV-TEST-DEL")
+	if err == nil || ordAfter != nil {
+		t.Fatalf("expected order to be deleted, but still found it")
+	}
+
+	// Deleting again should return not found error
+	if err := orderRepo.Delete("INV-TEST-DEL"); err == nil {
+		t.Fatalf("expected error when deleting non-existent order, got nil")
+	}
 }

@@ -640,15 +640,22 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// ResetProductOverride handles POST /api/admin/products/{slug}/reset
+// ResetProductOverride handles POST or DELETE /api/admin/products/{slug}/reset or /api/admin/products/{slug}
 func (h *AdminHandler) ResetProductOverride(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
-	if slug == "" {
+	rawSlug := chi.URLParam(r, "slug")
+	if rawSlug == "" {
 		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"error":   "Slug produk tidak boleh kosong",
 		})
 		return
+	}
+
+	slug := rawSlug
+	if unescaped, err := url.PathUnescape(rawSlug); err == nil && unescaped != "" {
+		slug = unescaped
+	} else if unescaped, err := url.QueryUnescape(rawSlug); err == nil && unescaped != "" {
+		slug = unescaped
 	}
 
 	if err := h.overrideRepo.Delete(slug); err != nil {

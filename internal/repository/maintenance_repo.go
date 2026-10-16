@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"storeku/internal/database"
@@ -95,23 +96,51 @@ func (r *MaintenanceRepository) CleanDatabase(dbPath string, req *models.Databas
 		DatabaseSizeBefore: formatBytes(sizeBefore),
 	}
 
+	// Unify request aliases from frontend
+	ordersMode := strings.ToUpper(strings.TrimSpace(req.OrdersMode))
+	if ordersMode == "" && req.OrdersScope != "" {
+		ordersMode = strings.ToUpper(strings.TrimSpace(req.OrdersScope))
+	}
+
+	ordersOlderDays := req.OrdersOlderDays
+	if ordersOlderDays <= 0 && req.OrdersOlderThanDays > 0 {
+		ordersOlderDays = req.OrdersOlderThanDays
+	}
+
+	keysOlderDays := req.KeysOlderDays
+	if keysOlderDays <= 0 && req.DeliveredKeysOlderThanDays > 0 {
+		keysOlderDays = req.DeliveredKeysOlderThanDays
+	}
+
+	logsMode := strings.ToUpper(strings.TrimSpace(req.LogsMode))
+	if logsMode == "" && req.LoginLogsScope != "" {
+		logsMode = strings.ToUpper(strings.TrimSpace(req.LoginLogsScope))
+	}
+
+	vouchersMode := strings.ToUpper(strings.TrimSpace(req.VouchersMode))
+	if vouchersMode == "" && req.VouchersScope != "" {
+		vouchersMode = strings.ToUpper(strings.TrimSpace(req.VouchersScope))
+	}
+
+	runVacuum := req.RunVacuum || req.Vacuum
+
 	// 1. Clean Orders
 	if req.CleanOrders {
 		var query string
 		var args []interface{}
 
-		switch req.OrdersMode {
+		switch ordersMode {
 		case "ALL":
 			query = "DELETE FROM orders"
-		case "EXPIRED_CANCELLED":
-			query = "DELETE FROM orders WHERE payment_status IN ('EXPIRED', 'CANCELLED')"
 		case "OLDER_THAN":
-			days := req.OrdersOlderDays
+			days := ordersOlderDays
 			if days <= 0 {
 				days = 3
 			}
 			query = "DELETE FROM orders WHERE created_at < datetime('now', ?)"
 			args = append(args, fmt.Sprintf("-%d days", days))
+		case "EXPIRED_CANCELLED", "EXPIRED", "EXPIRED_OR_CANCELLED":
+			query = "DELETE FROM orders WHERE payment_status IN ('EXPIRED', 'CANCELLED')"
 		default:
 			// Default to expired/cancelled if unspecified
 			query = "DELETE FROM orders WHERE payment_status IN ('EXPIRED', 'CANCELLED')"
@@ -127,7 +156,7 @@ func (r *MaintenanceRepository) CleanDatabase(dbPath string, req *models.Databas
 
 	// 2. Clean Delivered Keys (Reset delivered_items to '[]' on older paid orders)
 	if req.CleanDeliveredKeys {
-		days := req.KeysOlderDays
+		days := keysOlderDays
 		if days <= 0 {
 			days = 3
 		}
@@ -150,14 +179,14 @@ func (r *MaintenanceRepository) CleanDatabase(dbPath string, req *models.Databas
 	// 3. Clean Login Logs
 	if req.CleanLoginLogs {
 		var query string
-		switch req.LogsMode {
+		switch logsMode {
 		case "ALL":
 			query = "DELETE FROM admin_login_logs"
-		case "FAILED_ONLY":
+		case "FAILED_ONLY", "FAILED":
 			query = "DELETE FROM admin_login_logs WHERE status != 'SUCCESS'"
-		case "OLDER_THAN_7_DAYS":
+		case "OLDER_THAN_7_DAYS", "OLDER_THAN_7":
 			query = "DELETE FROM admin_login_logs WHERE login_at < datetime('now', '-7 days')"
-		case "OLDER_THAN_30_DAYS":
+		case "OLDER_THAN_30_DAYS", "OLDER_THAN_30":
 			query = "DELETE FROM admin_login_logs WHERE login_at < datetime('now', '-30 days')"
 		default:
 			query = "DELETE FROM admin_login_logs WHERE login_at < datetime('now', '-7 days')"
@@ -174,10 +203,10 @@ func (r *MaintenanceRepository) CleanDatabase(dbPath string, req *models.Databas
 	// 4. Clean Vouchers
 	if req.CleanVouchers {
 		var query string
-		switch req.VouchersMode {
+		switch vouchersMode {
 		case "ALL":
 			query = "DELETE FROM vouchers"
-		case "EXPIRED_USED":
+		case "EXPIRED_USED", "EXPIRED_OR_USED", "EXPIRED":
 			query = `
 				DELETE FROM vouchers 
 				WHERE (expires_at IS NOT NULL AND expires_at < datetime('now')) 
@@ -212,7 +241,7 @@ func (r *MaintenanceRepository) CleanDatabase(dbPath string, req *models.Databas
 	}
 
 	// 6. SQLite VACUUM
-	if req.RunVacuum {
+	if runVacuum {
 		// VACUUM defragments the database and shrinks the file size on disk
 		if _, err := r.db.Exec("VACUUM;"); err != nil {
 			// Log vacuum error without failing the whole cleanup
@@ -226,7 +255,19 @@ func (r *MaintenanceRepository) CleanDatabase(dbPath string, req *models.Databas
 	time.Sleep(50 * time.Millisecond) // brief pause for filesystem sync
 	sizeAfter := getDatabaseFileSize(dbPath)
 	res.DatabaseSizeAfter = formatBytes(sizeAfter)
-	res.Message = fmt.Sprintf("Pembersihan database selesai. Ukuran: %s ➔ %s", res.DatabaseSizeBefore, res.DatabaseSizeAfter)
+	res.SizeBefore = res.DatabaseSizeBefore
+	res.SizeAfter = res.DatabaseSizeAfter
+
+	freedBytes := sizeBefore - sizeAfter
+	if freedBytes < 0 {
+		freedBytes = 0
+	}
+	res.SpaceFreed = formatBytes(freedBytes)
+	res.DeliveredKeysCleared = res.KeysCleaned
+	res.AdminLogsDeleted = res.LogsDeleted
+	res.CachedProductsDeleted = res.CachedCleaned
+	res.Vacuumed = res.VacuumExecuted
+	res.Message = fmt.Sprintf("Pembersihan database selesai. Ukuran: %s ➔ %s (Hemat: %s)", res.DatabaseSizeBefore, res.DatabaseSizeAfter, res.SpaceFreed)
 
 	return res, nil
 }
