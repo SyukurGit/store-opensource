@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"storeku/internal/models"
+	"storeku/internal/service"
 )
 
 // ListProducts handles GET /api/admin/products
@@ -484,10 +486,7 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 
 	// Fetch upstream product to validate price floors
 	var rawProd *models.Product
-	if h.catalogService != nil {
-		rawProd, _ = h.catalogService.GetPublicProductBySlug(r.Context(), slug, "id")
-	}
-	if rawProd == nil && h.dcClient != nil {
+	if h.dcClient != nil && !strings.HasPrefix(slug, "silvex_") && !strings.HasPrefix(slug, "local_") {
 		if rawProducts, err := h.dcClient.FetchRawProducts(); err == nil {
 			for _, p := range rawProducts {
 				if p.Slug == slug {
@@ -497,19 +496,25 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 			}
 		}
 	}
-	if rawProd == nil && h.providerRegistry != nil {
-		if strings.HasPrefix(slug, "silvex_") {
-			if silvexProv, ok := h.providerRegistry.Get("SILVEX"); ok {
-				if prods, err := silvexProv.FetchCatalog(r.Context()); err == nil {
-					for _, p := range prods {
-						if p.Slug == slug {
-							rawProd = p
-							break
-						}
+	if rawProd == nil && h.providerRegistry != nil && strings.HasPrefix(slug, "silvex_") {
+		if silvexProv, ok := h.providerRegistry.Get("SILVEX"); ok {
+			if prods, err := silvexProv.FetchCatalog(r.Context()); err == nil {
+				for _, p := range prods {
+					if p.Slug == slug {
+						rawProd = p
+						break
 					}
 				}
 			}
 		}
+	}
+	if rawProd == nil && h.localProductRepo != nil && strings.HasPrefix(slug, "local_") {
+		if lp, err := h.localProductRepo.GetBySlug(slug); err == nil && lp != nil {
+			rawProd = lp.ToProduct()
+		}
+	}
+	if rawProd == nil && h.catalogService != nil {
+		rawProd, _ = h.catalogService.GetPublicProductBySlug(r.Context(), slug, "id")
 	}
 
 	if rawProd == nil {
@@ -520,8 +525,24 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	envPriceIDR := rawProd.PriceIDR // default env formula price
-	modalIDR := rawProd.ModalIDR    // raw modal in IDR (USD * rate)
+	pricing := service.NewPricingService(h.cfg, h.settingRepo)
+	var envPriceIDR int64
+	var modalIDR int64
+
+	if rawProd.PriceUSD > 0 {
+		envPriceIDR = pricing.ConvertUSDToIDR(rawProd.PriceUSD)
+		modalIDR = int64(math.Round(rawProd.PriceUSD * pricing.GetUSDRate()))
+	} else if rawProd.ModalIDR > 0 {
+		modalIDR = rawProd.ModalIDR
+		if rawProd.PriceIDR > 0 {
+			envPriceIDR = rawProd.PriceIDR
+		} else {
+			envPriceIDR = rawProd.ModalIDR
+		}
+	} else {
+		envPriceIDR = rawProd.PriceIDR
+		modalIDR = rawProd.PriceIDR
+	}
 
 	// Validate CustomPriceIDR (Harga Acuan): cannot be lower than default env price
 	effectiveRefPrice := envPriceIDR

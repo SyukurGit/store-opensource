@@ -467,9 +467,12 @@ func (c *DigitalCoreClient) FetchProducts() ([]*models.Product, error) {
 					promoCandidate += deltaModal // Pass-through delta to promo price
 				}
 
-				// Golden Rule: Promo must not be lower than minSafePrice (Modal + margin)
-				if promoCandidate < minSafePrice {
-					promoCandidate = minSafePrice
+				minModalFloor := p.ModalIDR
+				if deltaModal > 0 {
+					minModalFloor += deltaModal
+				}
+				if promoCandidate < minModalFloor {
+					promoCandidate = minModalFloor
 				}
 
 				// If promo price equals or exceeds reference price or original base price during surge, banner promo turns off!
@@ -676,8 +679,12 @@ func (c *DigitalCoreClient) FetchAdminProducts() ([]*models.AdminProductItem, er
 					promoCandidate += deltaModal // Pass-through delta
 				}
 
-				if promoCandidate < minSafePrice {
-					promoCandidate = minSafePrice
+				minModalFloor := item.ModalIDR
+				if deltaModal > 0 {
+					minModalFloor += deltaModal
+				}
+				if promoCandidate < minModalFloor {
+					promoCandidate = minModalFloor
 				}
 
 				if promoCandidate >= refPrice || (ov.CustomPriceIDR > 0 && deltaModal > 0 && promoCandidate >= ov.CustomPriceIDR) {

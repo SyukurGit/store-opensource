@@ -199,10 +199,13 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 			unitPriceIDR = s.pricing.ConvertUSDToIDR(unitPriceUSD)
 		}
 
-		// Golden rule safety check: unitPriceIDR must never be less than minSafePrice (modal + margin)
-		minSafePrice := s.pricing.ConvertUSDToIDR(unitPriceUSD)
-		if unitPriceIDR < minSafePrice {
-			unitPriceIDR = minSafePrice
+		// Floor check: unitPriceIDR must never be less than modalIDR
+		modalFloorIDR := targetProduct.ModalIDR
+		if modalFloorIDR <= 0 && s.pricing != nil {
+			modalFloorIDR = int64(math.Round(unitPriceUSD * s.pricing.GetUSDRate()))
+		}
+		if unitPriceIDR < modalFloorIDR {
+			unitPriceIDR = modalFloorIDR
 		}
 	}
 
@@ -437,7 +440,7 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 	return res, nil
 }
 
-// CancelOrder cancels an unpaid pending order
+// CancelOrder cancels an unpaid pending order and returns voucher quota if used
 func (s *OrderService) CancelOrder(invoice string) error {
 	order, err := s.orderRepo.GetOrderByInvoice(invoice)
 	if err != nil {
@@ -452,7 +455,40 @@ func (s *OrderService) CancelOrder(invoice string) error {
 		return nil
 	}
 
-	return s.orderRepo.UpdatePaymentStatus(order.InvoiceNumber, "CANCELLED", nil)
+	if err := s.orderRepo.UpdatePaymentStatus(order.InvoiceNumber, "CANCELLED", nil); err != nil {
+		return err
+	}
+
+	// Revert voucher usage if order had a voucher applied
+	if order.VoucherCode != "" && s.voucherService != nil {
+		if revErr := s.voucherService.RevertVoucherUsage(order.VoucherCode); revErr != nil {
+			log.Printf("[VOUCHER REVERT ERROR] Failed to revert voucher %s on cancel order %s: %v", order.VoucherCode, order.InvoiceNumber, revErr)
+		} else {
+			log.Printf("[VOUCHER REVERT SUCCESS] Reverted voucher %s on cancel order %s", order.VoucherCode, order.InvoiceNumber)
+		}
+	}
+
+	return nil
+}
+
+// SweepExpiredOrders checks expired pending orders, reverts any claimed vouchers, and marks them EXPIRED
+func (s *OrderService) SweepExpiredOrders() (int64, error) {
+	expiredOrders, err := s.orderRepo.GetExpiredPendingOrders()
+	if err != nil {
+		log.Printf("[SWEEPER ERROR] Failed to query expired pending orders: %v", err)
+	} else {
+		for _, o := range expiredOrders {
+			if o.VoucherCode != "" && s.voucherService != nil {
+				if revErr := s.voucherService.RevertVoucherUsage(o.VoucherCode); revErr != nil {
+					log.Printf("[VOUCHER SWEEPER ERROR] Failed to revert voucher %s on expired order %s: %v", o.VoucherCode, o.InvoiceNumber, revErr)
+				} else {
+					log.Printf("[VOUCHER SWEEPER SUCCESS] Reverted voucher %s on expired order %s", o.VoucherCode, o.InvoiceNumber)
+				}
+			}
+		}
+	}
+
+	return s.orderRepo.SweepExpiredOrders()
 }
 
 // TriggerInstantCheck triggers immediate check on payment gateway and updates if paid
@@ -558,12 +594,17 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 			liveCostUSD, err := prov.GetLiveCost(ctx, order.ProductSlug, order.Quantity)
 			if err == nil && liveCostUSD > 0 {
 				rate := s.pricing.GetUSDRate()
-				minMarginPct := s.pricing.GetMarginPercent()
 				liveTotalCostIDR := int64(math.Ceil(liveCostUSD * rate * float64(order.Quantity)))
 
-				minSafeRevenueIDR := int64(math.Ceil(float64(liveTotalCostIDR) * (1.0 + (minMarginPct / 100.0))))
-				if liveTotalCostIDR > order.TotalAmount || order.TotalAmount < minSafeRevenueIDR {
-					errMsg := fmt.Sprintf("Lonjakan harga API upstream: modal naik menjadi Rp %d (keuntungan aman minimal Rp %d, uang bayar Rp %d). Pembelian otomatis ditahan demi perlindungan saldo bot.", liveTotalCostIDR, minSafeRevenueIDR, order.TotalAmount)
+				// Auto-hold conditions:
+				// 1. Loss protection: liveTotalCostIDR > order.TotalAmount (selling below live modal cost)
+				// 2. Upstream surge: liveCostUSD > base cost at checkout by >5%
+				isSurge := false
+				if order.BasePriceUSD > 0 && liveCostUSD > order.BasePriceUSD*1.05 {
+					isSurge = true
+				}
+				if liveTotalCostIDR > order.TotalAmount || isSurge {
+					errMsg := fmt.Sprintf("Lonjakan harga API upstream: modal naik menjadi Rp %d (uang bayar Rp %d). Pembelian otomatis ditahan demi perlindungan saldo bot.", liveTotalCostIDR, order.TotalAmount)
 					log.Printf("[AUTO-HOLD PRICE SPIKE] %s: %s", invoice, errMsg)
 					_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_PRICE_SPIKE", errMsg, "", "", "[]")
 					return nil
@@ -625,13 +666,17 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 		liveCostUSD, err := s.dcClient.GetProductLiveCost(order.ProductSlug, order.Quantity)
 		if err == nil && liveCostUSD > 0 {
 			rate := s.pricing.GetUSDRate()
-			minMarginPct := s.pricing.GetMarginPercent()
 			liveTotalCostIDR := int64(math.Ceil(liveCostUSD * rate * float64(order.Quantity)))
 
-			minSafeRevenueIDR := int64(math.Ceil(float64(liveTotalCostIDR) * (1.0 + (minMarginPct / 100.0))))
-
-			if liveTotalCostIDR > order.TotalAmount || order.TotalAmount < minSafeRevenueIDR {
-				errMsg := fmt.Sprintf("Lonjakan harga API upstream: modal naik menjadi Rp %d (keuntungan aman minimal Rp %d, uang bayar Rp %d). Pembelian otomatis ditahan demi perlindungan saldo bot.", liveTotalCostIDR, minSafeRevenueIDR, order.TotalAmount)
+			// Auto-hold conditions:
+			// 1. Loss protection: liveTotalCostIDR > order.TotalAmount (selling below live modal cost)
+			// 2. Upstream surge: liveCostUSD > base cost at checkout by >5%
+			isSurge := false
+			if order.BasePriceUSD > 0 && liveCostUSD > order.BasePriceUSD*1.05 {
+				isSurge = true
+			}
+			if liveTotalCostIDR > order.TotalAmount || isSurge {
+				errMsg := fmt.Sprintf("Lonjakan harga API upstream: modal naik menjadi Rp %d (uang bayar Rp %d). Pembelian otomatis ditahan demi perlindungan saldo bot.", liveTotalCostIDR, order.TotalAmount)
 				log.Printf("[AUTO-HOLD PRICE SPIKE] %s: %s", invoice, errMsg)
 				_ = s.orderRepo.UpdateFulfillment(invoice, "HOLD_PRICE_SPIKE", errMsg, "", "", "[]")
 				return nil

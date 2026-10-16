@@ -473,6 +473,7 @@ type ValidateVoucherResponse struct {
 	Code              string `json:"code"`
 	DiscountIDR       int64  `json:"discount_idr"`
 	DiscountFormatted string `json:"discount_formatted"`
+	MinSpendIDR       int64  `json:"min_spend_idr"`
 	SubtotalOriginal  int64  `json:"subtotal_original"`
 	SubtotalFinal     int64  `json:"subtotal_final"`
 	Message           string `json:"message"`

@@ -218,6 +218,40 @@ func (r *OrderRepository) UpdateFulfillmentStatusOnly(invoice, status, errMsg st
 	return err
 }
 
+func (r *OrderRepository) GetExpiredPendingOrders() ([]*models.Order, error) {
+	nowUTC := time.Now().UTC()
+	query := `
+		SELECT
+			id, invoice_number, claim_code, product_slug, product_name, product_type,
+			quantity, base_price_usd, sell_price_idr, original_amount, unique_code,
+			total_amount, gateway_order_id, payment_gateway, payment_method, payment_channel,
+			crypto_amount_str, crypto_currency, binance_tx_id, binance_pay_id, binance_account_name,
+			qr_url, payment_status, fulfillment_status,
+			fulfillment_error, digitalcore_order_id, digitalcore_view_url, delivered_items,
+			warranty_info, customer_contact, customer_email, cost_at_checkout_usd, cost_at_fulfillment_usd,
+			voucher_code, discount_idr, paid_at, expires_at, created_at, updated_at
+		FROM orders
+		WHERE payment_status = 'PENDING'
+		  AND expires_at IS NOT NULL
+		  AND expires_at < ?
+	`
+	rows, err := r.db.Query(query, nowUTC)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []*models.Order
+	for rows.Next() {
+		o, err := scanOrderRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, o)
+	}
+	return orders, nil
+}
+
 func (r *OrderRepository) SweepExpiredOrders() (int64, error) {
 	nowUTC := time.Now().UTC()
 	query := `

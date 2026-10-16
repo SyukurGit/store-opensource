@@ -101,7 +101,7 @@ func (h *PublicHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
 
 	// 0. If CatalogService is initialized, use the multi-provider aggregated catalog
 	if h.catalogService != nil {
-		if prods, err := h.catalogService.GetPublicProducts(r.Context(), lang); err == nil && len(prods) > 0 {
+		if prods, err := h.catalogService.GetPublicProducts(r.Context(), lang); err == nil {
 			sendJSON(w, http.StatusOK, map[string]interface{}{
 				"success": true,
 				"data":    prods,
@@ -772,6 +772,7 @@ func (h *PublicHandler) ValidateVoucher(w http.ResponseWriter, r *http.Request) 
 			Code:              v.Code,
 			DiscountIDR:       discountIDR,
 			DiscountFormatted: fmt.Sprintf("Rp %d", discountIDR),
+			MinSpendIDR:       v.MinSpendIDR,
 			SubtotalOriginal:  subtotalIDR,
 			SubtotalFinal:     finalSubtotal,
 			Message:           fmt.Sprintf("Voucher hemat Rp %d berhasil diterapkan!", discountIDR),

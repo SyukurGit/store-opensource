@@ -105,8 +105,8 @@ func main() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			if count, err := orderRepo.SweepExpiredOrders(); err == nil && count > 0 {
-				log.Printf("[SWEEPER] Auto-expired %d unpaid orders past deadline.", count)
+			if count, err := orderService.SweepExpiredOrders(); err == nil && count > 0 {
+				log.Printf("[SWEEPER] Auto-expired %d unpaid orders past deadline (reverted vouchers).", count)
 			}
 		}
 	}()

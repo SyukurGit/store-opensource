@@ -176,8 +176,12 @@ func (s *CatalogService) GetPublicProducts(ctx context.Context, lang string) ([]
 					promoCandidate += deltaModal
 				}
 
-				if promoCandidate < minSafePrice {
-					promoCandidate = minSafePrice
+				minModalFloor := p.ModalIDR
+				if deltaModal > 0 {
+					minModalFloor += deltaModal
+				}
+				if promoCandidate < minModalFloor {
+					promoCandidate = minModalFloor
 				}
 
 				if promoCandidate >= refPrice || (ov.CustomPriceIDR > 0 && deltaModal > 0 && promoCandidate >= ov.CustomPriceIDR) {
