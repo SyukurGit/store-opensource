@@ -268,7 +268,18 @@ func main() {
 
 	// Clean Public Page Handlers
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+		// Respect explicit user language choice (ID)
+		cookie, err := r.Cookie("digimest_lang")
+		if err == nil && cookie.Value == "id" {
+			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+			return
+		}
+		// Default to English for international & default landing
+		dest := "/en/"
+		if r.URL.RawQuery != "" {
+			dest += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, dest, http.StatusFound)
 	})
 	r.Get("/product", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "product.html"))
