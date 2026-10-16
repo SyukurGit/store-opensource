@@ -118,6 +118,9 @@ func (s *CatalogService) GetPublicProducts(ctx context.Context, lang string) ([]
 			if ov.CustomWarranty != "" {
 				p.Warranty = ov.CustomWarranty
 			}
+			if ov.CustomLogo != "" {
+				p.Logo = ov.CustomLogo
+			}
 			if ov.CustomNameEN != "" {
 				p.NameEN = ov.CustomNameEN
 			}

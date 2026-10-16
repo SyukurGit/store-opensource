@@ -46,6 +46,19 @@ func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Fetch Silvex upstream balance in USD
+	if h.providerRegistry != nil {
+		if prov, ok := h.providerRegistry.Get("SILVEX"); ok {
+			if health, err := prov.CheckHealth(r.Context()); err == nil && health != nil {
+				stats.SilvexBalance = health.Balance
+				stats.SilvexConnected = health.Success
+			} else if err != nil {
+				stats.SilvexConnected = false
+				stats.SilvexError = err.Error()
+			}
+		}
+	}
+
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    stats,

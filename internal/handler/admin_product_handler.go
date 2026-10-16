@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -38,6 +39,210 @@ func (h *AdminHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    []*models.AdminProductItem{},
+	})
+}
+
+// ListSilvexProducts handles GET /api/admin/silvex/products
+func (h *AdminHandler) ListSilvexProducts(w http.ResponseWriter, r *http.Request) {
+	if h.providerRegistry == nil {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    []*models.AdminProductItem{},
+			"warning": "Provider registry belum terkonfigurasi",
+		})
+		return
+	}
+
+	silvexProv, ok := h.providerRegistry.Get("SILVEX")
+	if !ok {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    []*models.AdminProductItem{},
+			"warning": "Provider Silvex AI tidak terdaftar di sistem",
+		})
+		return
+	}
+
+	prods, err := silvexProv.FetchCatalog(r.Context())
+	if err != nil {
+		log.Printf("[ADMIN SILVEX] FetchCatalog failed: %v", err)
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    []*models.AdminProductItem{},
+			"warning": "Gagal mengambil katalog dari Silvex AI: " + err.Error(),
+		})
+		return
+	}
+
+	overrides := make(map[string]*models.ProductOverride)
+	if h.overrideRepo != nil {
+		if ovs, err := h.overrideRepo.GetAll(); err == nil {
+			overrides = ovs
+		}
+	}
+
+	var items []*models.AdminProductItem
+	for _, p := range prods {
+		originalName := p.Name
+		originalType := p.Type
+		originalRegion := p.Region
+		originalWarranty := p.Warranty
+		originalDesc := p.Description
+		originalTerms := p.Terms
+		originalStock := p.Stock
+
+		name := originalName
+		pType := originalType
+		region := originalRegion
+		warranty := originalWarranty
+		desc := originalDesc
+		terms := originalTerms
+		logo := p.Logo
+		stock := originalStock
+		isActive := true
+		isForceOutOfStock := false
+		customPriceIDR := int64(0)
+		promoPriceIDR := int64(0)
+		displayOrder := 0
+		salesCount := p.SalesCount
+		if salesCount <= 0 {
+			salesCount = 10
+		}
+		isCustomized := false
+
+		customName := ""
+		customType := ""
+		customRegion := ""
+		customWarranty := ""
+		customDesc := ""
+		customTerms := ""
+		customLogo := ""
+		customNameEN := ""
+		customTypeEN := ""
+		customRegionEN := ""
+		customWarrantyEN := ""
+		customDescEN := ""
+		customTermsEN := ""
+
+		if ov, ok := overrides[p.Slug]; ok {
+			isCustomized = true
+			if ov.CustomName != "" {
+				customName = ov.CustomName
+				name = ov.CustomName
+			}
+			if ov.CustomType != "" {
+				customType = ov.CustomType
+				pType = ov.CustomType
+			}
+			if ov.CustomRegion != "" {
+				customRegion = ov.CustomRegion
+				region = ov.CustomRegion
+			}
+			if ov.CustomWarranty != "" {
+				customWarranty = ov.CustomWarranty
+				warranty = ov.CustomWarranty
+			}
+			if ov.CustomDescription != "" {
+				customDesc = ov.CustomDescription
+				desc = ov.CustomDescription
+			}
+			if ov.CustomTerms != "" {
+				customTerms = ov.CustomTerms
+				terms = ov.CustomTerms
+			}
+			if ov.CustomLogo != "" {
+				customLogo = ov.CustomLogo
+				logo = ov.CustomLogo
+			}
+			if ov.CustomStock >= 0 {
+				stock = ov.CustomStock
+			}
+			customPriceIDR = ov.CustomPriceIDR
+			promoPriceIDR = ov.PromoPriceIDR
+			isActive = ov.IsActive
+			isForceOutOfStock = ov.IsForceOutOfStock
+			displayOrder = ov.DisplayOrder
+			if ov.SalesCount > 0 {
+				salesCount = ov.SalesCount
+			}
+			customNameEN = ov.CustomNameEN
+			customTypeEN = ov.CustomTypeEN
+			customRegionEN = ov.CustomRegionEN
+			customWarrantyEN = ov.CustomWarrantyEN
+			customDescEN = ov.CustomDescriptionEN
+			customTermsEN = ov.CustomTermsEN
+		}
+
+		refPrice := p.PriceIDR
+		if customPriceIDR > 0 {
+			refPrice = customPriceIDR
+		}
+		sellPrice := refPrice
+		hasPromo := false
+		discPct := 0
+		if promoPriceIDR > 0 && promoPriceIDR < refPrice {
+			sellPrice = promoPriceIDR
+			hasPromo = true
+			discPct = int(float64(refPrice-sellPrice) / float64(refPrice) * 100.0)
+		}
+
+		item := &models.AdminProductItem{
+			Slug:                 p.Slug,
+			OriginalName:         originalName,
+			CustomName:           customName,
+			Name:                 name,
+			OriginalType:         originalType,
+			CustomType:           customType,
+			Type:                 pType,
+			Logo:                 logo,
+			CustomLogo:           customLogo,
+			Source:               "SILVEX",
+			OriginalRegion:       originalRegion,
+			CustomRegion:         customRegion,
+			Region:               region,
+			OriginalStock:        originalStock,
+			CustomStock:          stock,
+			Stock:                stock,
+			OriginalWarranty:     originalWarranty,
+			CustomWarranty:       customWarranty,
+			Warranty:             warranty,
+			OriginalPriceUSD:     p.PriceUSD,
+			ModalIDR:             p.ModalIDR,
+			EnvPriceIDR:          p.PriceIDR,
+			CalculatedPriceIDR:   p.PriceIDR,
+			CustomPriceIDR:       customPriceIDR,
+			ReferencePriceIDR:    refPrice,
+			PromoPriceIDR:        promoPriceIDR,
+			PriceIDR:             sellPrice,
+			HasPromo:             hasPromo,
+			DiscountPercent:      discPct,
+			OriginalDescription:  originalDesc,
+			CustomDescription:    customDesc,
+			Description:          desc,
+			CustomTerms:          customTerms,
+			Terms:                terms,
+			CustomNameEN:         customNameEN,
+			CustomTypeEN:         customTypeEN,
+			CustomRegionEN:       customRegionEN,
+			CustomWarrantyEN:     customWarrantyEN,
+			CustomDescriptionEN:  customDescEN,
+			CustomTermsEN:        customTermsEN,
+			DisplayOrder:         displayOrder,
+			SalesCount:           salesCount,
+			IsActive:             isActive,
+			IsForceOutOfStock:    isForceOutOfStock,
+			IsOriginalOutOfStock: originalStock == 0,
+			IsCustomized:         isCustomized,
+			BaselineModalIDR:     p.ModalIDR,
+			IsAutoSuspended:      false,
+			SurgePercent:         0,
+		}
+		items = append(items, item)
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    items,
 	})
 }
 
@@ -173,6 +378,69 @@ func (h *AdminHandler) ListEtalaseProducts(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	// 3b. Check if Silvex AI is enabled in settings
+	silvexEnabled := true
+	if h.settingRepo != nil {
+		silvexEnabled = h.settingRepo.Get("silvex_enabled", "true") == "true"
+	}
+	if silvexEnabled && h.providerRegistry != nil {
+		if silvexProv, ok := h.providerRegistry.Get("SILVEX"); ok {
+			if sProds, err := silvexProv.FetchCatalog(r.Context()); err == nil {
+				overrides := make(map[string]*models.ProductOverride)
+				if h.overrideRepo != nil {
+					if ovs, err := h.overrideRepo.GetAll(); err == nil {
+						overrides = ovs
+					}
+				}
+				for _, p := range sProds {
+					if seenSlugs[p.Slug] {
+						continue
+					}
+					name := p.Name
+					pType := p.Type
+					active := true
+					dispOrder := 0
+					sales := p.SalesCount
+					if sales <= 0 {
+						sales = 10
+					}
+					logo := p.Logo
+
+					if ov, ok := overrides[p.Slug]; ok {
+						if ov.CustomName != "" {
+							name = ov.CustomName
+						}
+						if ov.CustomType != "" {
+							pType = ov.CustomType
+						}
+						if ov.CustomLogo != "" {
+							logo = ov.CustomLogo
+						}
+						active = ov.IsActive
+						dispOrder = ov.DisplayOrder
+						if ov.SalesCount > 0 {
+							sales = ov.SalesCount
+						}
+					}
+
+					items = append(items, &models.AdminEtalaseProductItem{
+						Slug:         p.Slug,
+						Name:         name,
+						OriginalName: p.Name,
+						Type:         pType,
+						Logo:         logo,
+						Region:       p.Region,
+						IsActive:     active,
+						DisplayOrder: dispOrder,
+						SalesCount:   sales,
+						Source:       "SILVEX",
+					})
+					seenSlugs[p.Slug] = true
+				}
+			}
+		}
+	}
+
 	// 4. Sort: display_order > 0 ascending first, followed by default (0), then by Name
 	sort.SliceStable(items, func(i, j int) bool {
 		aOrder, bOrder := items[i].DisplayOrder, items[j].DisplayOrder
@@ -215,20 +483,32 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Fetch upstream product to validate price floors
-	rawProducts, err := h.dcClient.FetchRawProducts()
-	if err != nil {
-		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
-			"success": false,
-			"error":   "Gagal memvalidasi produk upstream: " + err.Error(),
-		})
-		return
-	}
-
 	var rawProd *models.Product
-	for _, p := range rawProducts {
-		if p.Slug == slug {
-			rawProd = p
-			break
+	if h.catalogService != nil {
+		rawProd, _ = h.catalogService.GetPublicProductBySlug(r.Context(), slug, "id")
+	}
+	if rawProd == nil && h.dcClient != nil {
+		if rawProducts, err := h.dcClient.FetchRawProducts(); err == nil {
+			for _, p := range rawProducts {
+				if p.Slug == slug {
+					rawProd = p
+					break
+				}
+			}
+		}
+	}
+	if rawProd == nil && h.providerRegistry != nil {
+		if strings.HasPrefix(slug, "silvex_") {
+			if silvexProv, ok := h.providerRegistry.Get("SILVEX"); ok {
+				if prods, err := silvexProv.FetchCatalog(r.Context()); err == nil {
+					for _, p := range prods {
+						if p.Slug == slug {
+							rawProd = p
+							break
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -274,23 +554,51 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	existing, _ := h.overrideRepo.GetBySlug(slug)
+	customLogo := strings.TrimSpace(req.CustomLogo)
+	customNameEN := ""
+	customTypeEN := ""
+	customRegionEN := ""
+	customWarrantyEN := ""
+	customDescEN := ""
+	customTermsEN := ""
+
+	if existing != nil {
+		if customLogo == "" {
+			customLogo = existing.CustomLogo
+		}
+		customNameEN = existing.CustomNameEN
+		customTypeEN = existing.CustomTypeEN
+		customRegionEN = existing.CustomRegionEN
+		customWarrantyEN = existing.CustomWarrantyEN
+		customDescEN = existing.CustomDescriptionEN
+		customTermsEN = existing.CustomTermsEN
+	}
+
 	override := &models.ProductOverride{
-		ProductSlug:       slug,
-		CustomName:        req.CustomName,
-		CustomType:        req.CustomType,
-		CustomRegion:      req.CustomRegion,
-		CustomWarranty:    req.CustomWarranty,
-		CustomStock:       req.CustomStock,
-		CustomPriceIDR:    req.CustomPriceIDR,
-		PromoPriceIDR:     req.PromoPriceIDR,
-		CustomDescription: req.CustomDescription,
-		CustomTerms:       req.CustomTerms,
-		DisplayOrder:      req.DisplayOrder,
-		SalesCount:        req.SalesCount,
-		IsActive:          req.IsActive,
-		IsForceOutOfStock: req.IsForceOutOfStock,
-		BaselineModalIDR:  modalIDR,
-		IsAutoSuspended:   false,
+		ProductSlug:         slug,
+		CustomName:          req.CustomName,
+		CustomType:          req.CustomType,
+		CustomRegion:        req.CustomRegion,
+		CustomWarranty:      req.CustomWarranty,
+		CustomStock:         req.CustomStock,
+		CustomPriceIDR:      req.CustomPriceIDR,
+		PromoPriceIDR:       req.PromoPriceIDR,
+		CustomDescription:   req.CustomDescription,
+		CustomTerms:         req.CustomTerms,
+		CustomLogo:          customLogo,
+		CustomNameEN:        customNameEN,
+		CustomTypeEN:        customTypeEN,
+		CustomRegionEN:      customRegionEN,
+		CustomWarrantyEN:    customWarrantyEN,
+		CustomDescriptionEN: customDescEN,
+		CustomTermsEN:       customTermsEN,
+		DisplayOrder:        req.DisplayOrder,
+		SalesCount:          req.SalesCount,
+		IsActive:            req.IsActive,
+		IsForceOutOfStock:   req.IsForceOutOfStock,
+		BaselineModalIDR:    modalIDR,
+		IsAutoSuspended:     false,
 	}
 
 	if err := h.overrideRepo.Upsert(override); err != nil {

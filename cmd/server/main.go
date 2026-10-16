@@ -140,6 +140,7 @@ func main() {
 			r.Post("/admin/digitalcore/check", adminHandler.CheckDigitalCoreConnection)
 			r.Get("/admin/silvex/check", adminHandler.CheckSilvexConnection)
 			r.Post("/admin/silvex/check", adminHandler.CheckSilvexConnection)
+			r.Get("/admin/silvex/products", adminHandler.ListSilvexProducts)
 			r.Get("/admin/products", adminHandler.ListProducts)
 			r.Get("/admin/etalase-products", adminHandler.ListEtalaseProducts)
 			r.Post("/admin/products/{slug}", adminHandler.SaveProductOverride)
@@ -220,6 +221,7 @@ func main() {
 		"/admin/index.html":    "/admin",
 		"/admin/login.html":    "/admin/login",
 		"/admin/products.html":        "/admin/products",
+		"/admin/silvex-products.html": "/admin/silvex-products",
 		"/admin/custom-products.html": "/admin/custom-products",
 		"/admin/translations.html":    "/admin/translations",
 		"/admin/orders.html":          "/admin/orders",
@@ -332,6 +334,9 @@ func main() {
 	})
 	r.Get("/admin/products", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "products.html"))
+	})
+	r.Get("/admin/silvex-products", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(webDir, "admin", "silvex-products.html"))
 	})
 	r.Get("/admin/custom-products", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(webDir, "admin", "custom-products.html"))

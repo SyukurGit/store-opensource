@@ -141,6 +141,93 @@ func (h *AdminHandler) GetTranslations(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 3. Fetch Upstream Silvex AI Products if available
+	if h.providerRegistry != nil {
+		if silvexProv, ok := h.providerRegistry.Get("SILVEX"); ok {
+			if sProds, err := silvexProv.FetchCatalog(r.Context()); err == nil {
+				overrides := make(map[string]*models.ProductOverride)
+				if h.overrideRepo != nil {
+					if ovs, err := h.overrideRepo.GetAll(); err == nil {
+						overrides = ovs
+					}
+				}
+				existingSlugs := make(map[string]bool)
+				for _, it := range items {
+					existingSlugs[it.Slug] = true
+				}
+				for _, p := range sProds {
+					if existingSlugs[p.Slug] {
+						continue
+					}
+					nameID := p.Name
+					typeID := p.Type
+					regionID := p.Region
+					warrantyID := p.Warranty
+					descID := p.Description
+					termsID := p.Terms
+					isActive := p.IsActive
+
+					nameEN := ""
+					typeEN := ""
+					regionEN := ""
+					warrantyEN := ""
+					descEN := ""
+					termsEN := ""
+
+					if ov, ok := overrides[p.Slug]; ok {
+						if ov.CustomName != "" {
+							nameID = ov.CustomName
+						}
+						if ov.CustomType != "" {
+							typeID = ov.CustomType
+						}
+						if ov.CustomRegion != "" {
+							regionID = ov.CustomRegion
+						}
+						if ov.CustomWarranty != "" {
+							warrantyID = ov.CustomWarranty
+						}
+						if ov.CustomDescription != "" {
+							descID = ov.CustomDescription
+						}
+						if ov.CustomTerms != "" {
+							termsID = ov.CustomTerms
+						}
+						isActive = ov.IsActive
+
+						nameEN = ov.CustomNameEN
+						typeEN = ov.CustomTypeEN
+						regionEN = ov.CustomRegionEN
+						warrantyEN = ov.CustomWarrantyEN
+						descEN = ov.CustomDescriptionEN
+						termsEN = ov.CustomTermsEN
+					}
+
+					isTrans := strings.TrimSpace(nameEN) != "" || strings.TrimSpace(descEN) != ""
+
+					items = append(items, &models.ProductTranslationItem{
+						Slug:          p.Slug,
+						Source:        "SILVEX",
+						NameID:        nameID,
+						TypeID:        typeID,
+						RegionID:      regionID,
+						WarrantyID:    warrantyID,
+						DescriptionID: descID,
+						TermsID:       termsID,
+						NameEN:        nameEN,
+						TypeEN:        typeEN,
+						RegionEN:      regionEN,
+						WarrantyEN:    warrantyEN,
+						DescriptionEN: descEN,
+						TermsEN:       termsEN,
+						IsTranslated:  isTrans,
+						IsActive:      isActive,
+					})
+				}
+			}
+		}
+	}
+
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    items,

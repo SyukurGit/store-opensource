@@ -95,7 +95,7 @@ func NormalizeProduct(raw RawProduct, pricing PricingCalculator) *models.Product
 		Slug:              slug,
 		Name:              name,
 		Type:              prodType,
-		Logo:              strings.TrimSpace(raw.Logo),
+		Logo:              ResolveAILogo(name, strings.TrimSpace(raw.Logo)),
 		Region:            "Global",
 		Stock:             stock,
 		StockCapped:       false,

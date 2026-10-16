@@ -208,6 +208,7 @@ type ProductOverride struct {
 	PromoPriceIDR     int64     `json:"promo_price_idr"`
 	CustomDescription string    `json:"custom_description"`
 	CustomTerms       string    `json:"custom_terms"`
+	CustomLogo        string    `json:"custom_logo"`
 	CustomNameEN      string    `json:"custom_name_en"`
 	CustomTypeEN      string    `json:"custom_type_en"`
 	CustomRegionEN    string    `json:"custom_region_en"`
@@ -235,6 +236,7 @@ type ProductOverrideRequest struct {
 	PromoPriceIDR     int64  `json:"promo_price_idr"`
 	CustomDescription string `json:"custom_description"`
 	CustomTerms       string `json:"custom_terms"`
+	CustomLogo        string `json:"custom_logo"`
 	DisplayOrder      int    `json:"display_order"`
 	SalesCount        int    `json:"sales_count"`
 	IsActive          bool   `json:"is_active"`
@@ -251,6 +253,8 @@ type AdminProductItem struct {
 	CustomType           string        `json:"custom_type"`
 	Type                 string        `json:"type"`
 	Logo                 string        `json:"logo"`
+	CustomLogo           string        `json:"custom_logo,omitempty"`
+	Source               string        `json:"source"`
 	OriginalRegion       string        `json:"original_region"`
 	CustomRegion         string        `json:"custom_region"`
 	Region               string        `json:"region"`
@@ -383,6 +387,9 @@ type AdminStats struct {
 	DigitalCoreOrders    string  `json:"digitalcore_orders"`
 	DigitalCoreConnected bool    `json:"digitalcore_connected"`
 	DigitalCoreError     string  `json:"digitalcore_error,omitempty"`
+	SilvexBalance        float64 `json:"silvex_balance"`
+	SilvexConnected      bool    `json:"silvex_connected"`
+	SilvexError          string  `json:"silvex_error,omitempty"`
 	TodayRevenueIDR      int64   `json:"today_revenue_idr"`
 	TodayOrders          int64   `json:"today_orders"`
 }

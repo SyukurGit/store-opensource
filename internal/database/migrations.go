@@ -55,6 +55,7 @@ func RunMigrations(db *sql.DB) error {
 			promo_price_idr INTEGER DEFAULT 0,
 			custom_description TEXT DEFAULT '',
 			custom_terms TEXT DEFAULT '',
+			custom_logo TEXT DEFAULT '',
 			custom_name_en TEXT DEFAULT '',
 			custom_type_en TEXT DEFAULT '',
 			custom_region_en TEXT DEFAULT '',
@@ -197,6 +198,7 @@ func RunMigrations(db *sql.DB) error {
 		"ALTER TABLE product_overrides ADD COLUMN custom_warranty_en TEXT DEFAULT '';",
 		"ALTER TABLE product_overrides ADD COLUMN custom_description_en TEXT DEFAULT '';",
 		"ALTER TABLE product_overrides ADD COLUMN custom_terms_en TEXT DEFAULT '';",
+		"ALTER TABLE product_overrides ADD COLUMN custom_logo TEXT DEFAULT '';",
 	}
 	for _, alterQ := range alterQueries {
 		_, _ = db.Exec(alterQ)
