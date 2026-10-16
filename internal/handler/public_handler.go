@@ -709,21 +709,26 @@ func (h *PublicHandler) ValidateVoucher(w http.ResponseWriter, r *http.Request) 
 		req.Quantity = 1
 	}
 
-	// Calculate product subtotal to validate voucher rules against
-	products, err := h.dcClient.FetchProducts()
-	if err != nil {
-		sendJSON(w, http.StatusInternalServerError, map[string]interface{}{
-			"success": false,
-			"error":   "Gagal memuat informasi produk",
-		})
-		return
+	// 1. Resolve product across all providers (CatalogService -> LocalRepo -> DCClient)
+	var targetProduct *models.Product
+	if h.catalogService != nil {
+		targetProduct, _ = h.catalogService.GetPublicProductBySlug(r.Context(), req.ProductSlug, "id")
 	}
 
-	var targetProduct *models.Product
-	for _, p := range products {
-		if p.Slug == req.ProductSlug {
-			targetProduct = p
-			break
+	if targetProduct == nil && h.localProductRepo != nil {
+		if lp, err := h.localProductRepo.GetBySlug(req.ProductSlug); err == nil && lp != nil && lp.IsActive {
+			targetProduct = lp.ToProduct()
+		}
+	}
+
+	if targetProduct == nil && h.dcClient != nil {
+		if products, err := h.dcClient.FetchProducts(); err == nil {
+			for _, p := range products {
+				if p.Slug == req.ProductSlug {
+					targetProduct = p
+					break
+				}
+			}
 		}
 	}
 
@@ -736,6 +741,14 @@ func (h *PublicHandler) ValidateVoucher(w http.ResponseWriter, r *http.Request) 
 	}
 
 	unitPriceIDR := targetProduct.PriceIDR
+	for _, tier := range targetProduct.Tiers {
+		if req.Quantity >= tier.MinQty && (tier.MaxQty == nil || req.Quantity <= *tier.MaxQty) {
+			if tier.PriceIDR > 0 {
+				unitPriceIDR = tier.PriceIDR
+			}
+			break
+		}
+	}
 	subtotalIDR := unitPriceIDR * int64(req.Quantity)
 
 	v, discountIDR, err := h.voucherService.ValidateForCheckout(req.Code, subtotalIDR)
