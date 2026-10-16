@@ -242,7 +242,11 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	claimCode := fmt.Sprintf("CLM-%s", generateRandomString(6))
 
 	// 4. Request payment invoice from active gateway (PaymentG or multi-payment)
-	gw, err := s.getPaymentGateway(req.PaymentGateway)
+	gwID := req.PaymentGateway
+	if gwID == "" && (req.PaymentMethod == "BINANCE_PAY" || req.PaymentMethod == "CRYPTO") {
+		gwID = "BINANCE"
+	}
+	gw, err := s.getPaymentGateway(gwID)
 	if err != nil {
 		if voucherClaimed && s.voucherService != nil {
 			_ = s.voucherService.RevertVoucherUsage(appliedVoucherCode)
@@ -268,6 +272,23 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		payReq.Channel = req.PaymentChannel
 	}
 
+	// Calculate crypto amount if paying via Binance Pay or Crypto
+	if payReq.Method == payment.MethodBinancePay || payReq.Method == payment.MethodCrypto || gw.ID() == "BINANCE" {
+		usdRate := s.pricing.GetUSDRate()
+		if usdRate <= 0 {
+			usdRate = 18000.0
+		}
+		amountUSDT := math.Round((float64(subtotalIDR)/usdRate)*100.0) / 100.0
+		if amountUSDT < 0.01 {
+			amountUSDT = 0.01
+		}
+		payReq.AmountCrypto = amountUSDT
+		payReq.Currency = "USDT"
+		if payReq.Channel == "" || payReq.Channel == "SHOPEEPAY" {
+			payReq.Channel = "USDT"
+		}
+	}
+
 	payResp, err := gw.CreatePayment(context.Background(), payReq)
 	if err != nil {
 		// Revert voucher usage only if network gateway failure prevented payment generation entirely
@@ -285,31 +306,35 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 
 	// 5. Store order in DB
 	order := &models.Order{
-		InvoiceNumber:     invoiceNumber,
-		ClaimCode:         claimCode,
-		ProductSlug:       targetProduct.Slug,
-		ProductName:       targetProduct.Name,
-		ProductType:       targetProduct.Type,
-		Quantity:          req.Quantity,
-		BasePriceUSD:      unitPriceUSD,
-		SellPriceIDR:      unitPriceIDR,
-		OriginalAmount:    payResp.OriginalAmount,
-		UniqueCode:        payResp.UniqueCode,
-		TotalAmount:       payResp.TotalAmount,
-		VoucherCode:       appliedVoucherCode,
-		DiscountIDR:       discountIDR,
-		GatewayOrderID:    payResp.GatewayOrderID,
-		PaymentGateway:    gw.ID(),
-		PaymentMethod:     string(payResp.Method),
-		PaymentChannel:    payResp.Channel,
-		QRURL:             payResp.QRURL,
-		PaymentStatus:     "PENDING",
-		FulfillmentStatus: "PENDING",
-		WarrantyInfo:      targetProduct.Warranty,
-		CustomerContact:   req.CustomerContact,
-		CustomerEmail:     req.CustomerEmail,
-		CostAtCheckoutUSD: unitPriceUSD,
-		ExpiresAt:         expiresAtTime,
+		InvoiceNumber:      invoiceNumber,
+		ClaimCode:          claimCode,
+		ProductSlug:        targetProduct.Slug,
+		ProductName:        targetProduct.Name,
+		ProductType:        targetProduct.Type,
+		Quantity:           req.Quantity,
+		BasePriceUSD:       unitPriceUSD,
+		SellPriceIDR:       unitPriceIDR,
+		OriginalAmount:     payResp.OriginalAmount,
+		UniqueCode:         payResp.UniqueCode,
+		TotalAmount:        payResp.TotalAmount,
+		CryptoAmountStr:    payResp.CryptoAmountStr,
+		CryptoCurrency:     payResp.CryptoCurrency,
+		BinancePayID:       payResp.BinancePayID,
+		BinanceAccountName: payResp.BinanceAccountName,
+		VoucherCode:        appliedVoucherCode,
+		DiscountIDR:        discountIDR,
+		GatewayOrderID:     payResp.GatewayOrderID,
+		PaymentGateway:     gw.ID(),
+		PaymentMethod:      string(payResp.Method),
+		PaymentChannel:     payResp.Channel,
+		QRURL:              payResp.QRURL,
+		PaymentStatus:      "PENDING",
+		FulfillmentStatus:  "PENDING",
+		WarrantyInfo:       targetProduct.Warranty,
+		CustomerContact:    req.CustomerContact,
+		CustomerEmail:      req.CustomerEmail,
+		CostAtCheckoutUSD:  unitPriceUSD,
+		ExpiresAt:          expiresAtTime,
 	}
 
 	if err := s.orderRepo.CreateOrder(order); err != nil {
@@ -317,22 +342,26 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	}
 
 	return &models.CheckoutResponse{
-		InvoiceNumber:    invoiceNumber,
-		ClaimCode:        "", // Jangan bocorkan kode klaim sebelum lunas
-		ProductName:      targetProduct.Name,
-		Quantity:         req.Quantity,
-		OriginalAmount:   payResp.OriginalAmount,
-		UniqueCode:       payResp.UniqueCode,
-		TotalAmount:      payResp.TotalAmount,
-		VoucherCode:      appliedVoucherCode,
-		DiscountIDR:      discountIDR,
-		GatewayOrderID:   payResp.GatewayOrderID,
-		PaymentGateway:   gw.ID(),
-		PaymentMethod:    string(payResp.Method),
-		PaymentChannel:   payResp.Channel,
-		QRURL:            payResp.QRURL,
-		ExpiresAt:        expiresAtTime.Format(time.RFC3339),
-		ExpiresInSeconds: payResp.ExpiresInSeconds,
+		InvoiceNumber:      invoiceNumber,
+		ClaimCode:          "", // Jangan bocorkan kode klaim sebelum lunas
+		ProductName:        targetProduct.Name,
+		Quantity:           req.Quantity,
+		OriginalAmount:     payResp.OriginalAmount,
+		UniqueCode:         payResp.UniqueCode,
+		TotalAmount:        payResp.TotalAmount,
+		CryptoAmountStr:    payResp.CryptoAmountStr,
+		CryptoCurrency:     payResp.CryptoCurrency,
+		BinancePayID:       payResp.BinancePayID,
+		BinanceAccountName: payResp.BinanceAccountName,
+		VoucherCode:        appliedVoucherCode,
+		DiscountIDR:        discountIDR,
+		GatewayOrderID:     payResp.GatewayOrderID,
+		PaymentGateway:     gw.ID(),
+		PaymentMethod:      string(payResp.Method),
+		PaymentChannel:     payResp.Channel,
+		QRURL:              payResp.QRURL,
+		ExpiresAt:          expiresAtTime.Format(time.RFC3339),
+		ExpiresInSeconds:   payResp.ExpiresInSeconds,
 	}, nil
 }
 
@@ -361,22 +390,27 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 	}
 
 	res := &models.OrderStatusResponse{
-		InvoiceNumber:     order.InvoiceNumber,
-		ClaimCode:         visibleClaimCode,
-		ProductName:       order.ProductName,
-		ProductType:       order.ProductType,
-		Quantity:          order.Quantity,
-		TotalAmount:       order.TotalAmount,
-		PaymentGateway:    order.PaymentGateway,
-		PaymentMethod:     order.PaymentMethod,
-		PaymentChannel:    order.PaymentChannel,
-		PaymentStatus:     order.PaymentStatus,
-		FulfillmentStatus: order.FulfillmentStatus,
-		QRURL:             order.QRURL,
-		DeliveredItems:    items,
-		WarrantyInfo:      order.WarrantyInfo,
-		CustomerContact:   order.CustomerContact,
-		CustomerEmail:     order.CustomerEmail,
+		InvoiceNumber:      order.InvoiceNumber,
+		ClaimCode:          visibleClaimCode,
+		ProductName:        order.ProductName,
+		ProductType:        order.ProductType,
+		Quantity:           order.Quantity,
+		TotalAmount:        order.TotalAmount,
+		PaymentGateway:     order.PaymentGateway,
+		PaymentMethod:      order.PaymentMethod,
+		PaymentChannel:     order.PaymentChannel,
+		CryptoAmountStr:    order.CryptoAmountStr,
+		CryptoCurrency:     order.CryptoCurrency,
+		BinanceTxID:        order.BinanceTxID,
+		BinancePayID:       order.BinancePayID,
+		BinanceAccountName: order.BinanceAccountName,
+		PaymentStatus:      order.PaymentStatus,
+		FulfillmentStatus:  order.FulfillmentStatus,
+		QRURL:              order.QRURL,
+		DeliveredItems:     items,
+		WarrantyInfo:       order.WarrantyInfo,
+		CustomerContact:    order.CustomerContact,
+		CustomerEmail:      order.CustomerEmail,
 	}
 
 	if order.PaidAt != nil {
@@ -478,7 +512,7 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 
 	now := time.Now().UTC()
 	if order.PaymentStatus != "PAID" {
-		if err := s.orderRepo.UpdatePaymentStatus(invoice, "PAID", &now); err != nil {
+		if err := s.orderRepo.UpdatePaymentSuccessWithTxID(invoice, "PAID", &now, txID); err != nil {
 			log.Printf("Error updating payment status for %s: %v", invoice, err)
 		}
 

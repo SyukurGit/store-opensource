@@ -37,6 +37,21 @@ func (r *Registry) Register(g Gateway) {
 	}
 }
 
+// RegisterAlias registers an alternative name that points to an existing gateway ID
+func (r *Registry) RegisterAlias(alias, targetID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	cleanTarget := strings.ToUpper(strings.TrimSpace(targetID))
+	g, ok := r.gateways[cleanTarget]
+	if !ok {
+		return fmt.Errorf("target gateway '%s' not registered", cleanTarget)
+	}
+	cleanAlias := strings.ToUpper(strings.TrimSpace(alias))
+	r.gateways[cleanAlias] = g
+	return nil
+}
+
 // SetDefault sets the default payment gateway ID
 func (r *Registry) SetDefault(id string) error {
 	r.mu.Lock()

@@ -15,34 +15,43 @@ const (
 	MethodEWallet        Method = "EWALLET"
 	MethodRetailOutlet   Method = "RETAIL_OUTLET"
 	MethodManualTransfer Method = "MANUAL_TRANSFER"
+	MethodBinancePay     Method = "BINANCE_PAY"
+	MethodCrypto         Method = "CRYPTO"
 )
 
 // CreatePaymentRequest defines the standardized input to create a payment on any gateway
 type CreatePaymentRequest struct {
 	InvoiceNumber   string
 	Amount          int64
+	AmountCrypto    float64
+	Currency        string // "IDR", "USDT", "USD"
 	ExpiryMinutes   int
 	CustomerEmail   string
 	CustomerContact string
 	Metadata        string
 	Method          Method
-	Channel         string // e.g. "SHOPEEPAY", "BCA", "GOPAY", "OVO"
+	Channel         string // e.g. "SHOPEEPAY", "USDT", "BCA", "GOPAY", "OVO"
 }
 
 // PaymentResponse is the standardized output returned by any gateway
 type PaymentResponse struct {
-	GatewayOrderID   string
-	GatewayID        string
-	Method           Method
-	Channel          string
-	OriginalAmount   int64
-	UniqueCode       int
-	TotalAmount      int64
-	QRURL            string
-	PaymentURL       string
-	ExpiresAt        *time.Time
-	ExpiresInSeconds int
-	RawData          map[string]interface{}
+	GatewayOrderID     string
+	GatewayID          string
+	Method             Method
+	Channel            string
+	OriginalAmount     int64
+	UniqueCode         int
+	TotalAmount        int64
+	CryptoAmountStr    string
+	CryptoCurrency     string
+	BinancePayID       string
+	BinanceAccountName string
+	BinanceUniQRURL    string
+	QRURL              string
+	PaymentURL         string
+	ExpiresAt          *time.Time
+	ExpiresInSeconds   int
+	RawData            map[string]interface{}
 }
 
 // PaymentStatusResponse represents standardized status returned when querying gateway
@@ -58,15 +67,16 @@ type PaymentStatusResponse struct {
 
 // WebhookNotification represents parsed and verified webhook data
 type WebhookNotification struct {
-	Event          string // e.g. "payment.success"
-	GatewayID      string
-	InvoiceNumber  string
-	GatewayOrderID string
-	TransactionID  string
-	TotalAmount    int64
-	PaidAt         *time.Time
-	IsVerified     bool
-	RawPayload     []byte
+	Event           string // e.g. "payment.success"
+	GatewayID       string
+	InvoiceNumber   string
+	GatewayOrderID  string
+	TransactionID   string
+	TotalAmount     int64
+	CryptoAmountStr string
+	PaidAt          *time.Time
+	IsVerified      bool
+	RawPayload      []byte
 }
 
 // Gateway is the primary interface every payment provider must satisfy

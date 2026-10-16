@@ -28,6 +28,8 @@ type Config struct {
 	VoucherSecretKey        string
 	SilvexBaseURL           string
 	SilvexAPIKey            string
+	PaymentGBinanceAPIURL   string
+	PaymentGBinanceAPIKey   string
 }
 
 func LoadConfig() *Config {
@@ -43,6 +45,8 @@ func LoadConfig() *Config {
 		SilvexAPIKey:            getEnv("SILVEX_API_KEY", ""),
 		PaymentGAPIURL:          getEnv("PAYMENTG_API_URL", "https://paymentg.syukurapi.online/api/sandbox"),
 		PaymentGAPIKey:          getEnv("PAYMENTG_API_KEY", ""),
+		PaymentGBinanceAPIURL:   getEnv("PAYMENTG_BINANCE_API_URL", "http://localhost:3300/api/sandbox"),
+		PaymentGBinanceAPIKey:   getEnv("PAYMENTG_BINANCE_API_KEY", getEnv("PAYMENTG_API_KEY", "")),
 		AdminUsername:           getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:           getEnv("ADMIN_PASSWORD", "admin123"),
 		AdminSecretKey:          getEnv("ADMIN_SECRET_KEY", "storeku_default_secret_key"),

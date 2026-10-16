@@ -17,9 +17,14 @@ type Order struct {
 	UniqueCode          int        `json:"unique_code"`
 	TotalAmount         int64      `json:"total_amount"`
 	GatewayOrderID      string     `json:"gateway_order_id"`
-	PaymentGateway      string     `json:"payment_gateway"` // e.g. PAYMENTG, TRIPAY, MIDTRANS
-	PaymentMethod       string     `json:"payment_method"`  // e.g. QRIS, VIRTUAL_ACCOUNT, EWALLET
-	PaymentChannel      string     `json:"payment_channel"` // e.g. SHOPEEPAY, BCA, GOPAY
+	PaymentGateway      string     `json:"payment_gateway"` // e.g. PAYMENTG, TRIPAY, MIDTRANS, BINANCE
+	PaymentMethod       string     `json:"payment_method"`  // e.g. QRIS, VIRTUAL_ACCOUNT, EWALLET, BINANCE_PAY
+	PaymentChannel      string     `json:"payment_channel"` // e.g. SHOPEEPAY, BCA, GOPAY, USDT
+	CryptoAmountStr     string     `json:"crypto_amount_str,omitempty"`
+	CryptoCurrency      string     `json:"crypto_currency,omitempty"`
+	BinanceTxID         string     `json:"binance_tx_id,omitempty"`
+	BinancePayID        string     `json:"binance_pay_id,omitempty"`
+	BinanceAccountName  string     `json:"binance_account_name,omitempty"`
 	QRURL               string     `json:"qr_url"`
 	PaymentStatus       string     `json:"payment_status"`     // PENDING, PAID, EXPIRED, CANCELLED
 	FulfillmentStatus   string     `json:"fulfillment_status"` // PENDING, SUCCESS, FAILED
@@ -338,12 +343,16 @@ type CheckoutResponse struct {
 	VoucherCode      string `json:"voucher_code,omitempty"`
 	DiscountIDR      int64  `json:"discount_idr,omitempty"`
 	GatewayOrderID   string `json:"gateway_order_id"`
-	PaymentGateway   string `json:"payment_gateway,omitempty"`
-	PaymentMethod    string `json:"payment_method,omitempty"`
-	PaymentChannel   string `json:"payment_channel,omitempty"`
-	QRURL            string `json:"qr_url"`
-	ExpiresAt        string `json:"expires_at"`
-	ExpiresInSeconds int    `json:"expires_in_seconds"`
+	PaymentGateway     string `json:"payment_gateway,omitempty"`
+	PaymentMethod      string `json:"payment_method,omitempty"`
+	PaymentChannel     string `json:"payment_channel,omitempty"`
+	CryptoAmountStr    string `json:"crypto_amount_str,omitempty"`
+	CryptoCurrency     string `json:"crypto_currency,omitempty"`
+	BinancePayID       string `json:"binance_pay_id,omitempty"`
+	BinanceAccountName string `json:"binance_account_name,omitempty"`
+	QRURL              string `json:"qr_url"`
+	ExpiresAt          string `json:"expires_at"`
+	ExpiresInSeconds   int    `json:"expires_in_seconds"`
 }
 
 // OrderStatusResponse for payment page polling
@@ -358,6 +367,11 @@ type OrderStatusResponse struct {
 	PaymentGateway      string   `json:"payment_gateway,omitempty"`
 	PaymentMethod       string   `json:"payment_method,omitempty"`
 	PaymentChannel      string   `json:"payment_channel,omitempty"`
+	CryptoAmountStr     string   `json:"crypto_amount_str,omitempty"`
+	CryptoCurrency      string   `json:"crypto_currency,omitempty"`
+	BinanceTxID         string   `json:"binance_tx_id,omitempty"`
+	BinancePayID        string   `json:"binance_pay_id,omitempty"`
+	BinanceAccountName  string   `json:"binance_account_name,omitempty"`
 	FulfillmentStatus   string   `json:"fulfillment_status"`
 	QRURL               string   `json:"qr_url"`
 	DeliveredItems      []string `json:"delivered_items,omitempty"`

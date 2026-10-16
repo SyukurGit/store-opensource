@@ -70,20 +70,28 @@ func (h *PublicHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 // GetAppConfig handles GET /api/config
 func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 	username := "Digimestsupport"
+	usdRate := 18000.0
 	if h.settingRepo != nil {
 		if dbUser := h.settingRepo.Get("telegram_cs_username", ""); dbUser != "" {
 			username = dbUser
 		} else if h.cfg != nil && h.cfg.TelegramSupportUsername != "" {
 			username = h.cfg.TelegramSupportUsername
 		}
-	} else if h.cfg != nil && h.cfg.TelegramSupportUsername != "" {
-		username = h.cfg.TelegramSupportUsername
+		usdRate = h.settingRepo.GetFloat("usd_rate", 18000.0)
+	} else if h.cfg != nil {
+		if h.cfg.TelegramSupportUsername != "" {
+			username = h.cfg.TelegramSupportUsername
+		}
+		if h.cfg.USDToIDRRate > 0 {
+			usdRate = h.cfg.USDToIDRRate
+		}
 	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":           true,
 		"telegram_username": username,
 		"telegram_url":      fmt.Sprintf("https://t.me/%s", username),
+		"usd_rate":          usdRate,
 	})
 }
 

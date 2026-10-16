@@ -93,7 +93,11 @@ func (h *WebhookHandler) HandlePaymentGWebhook(w http.ResponseWriter, r *http.Re
 func (h *WebhookHandler) HandleGatewayWebhook(w http.ResponseWriter, r *http.Request) {
 	gatewayID := chi.URLParam(r, "gateway")
 	if gatewayID == "" {
-		gatewayID = "PAYMENTG"
+		if strings.Contains(r.URL.Path, "binance") {
+			gatewayID = "BINANCE"
+		} else {
+			gatewayID = "PAYMENTG"
+		}
 	}
 
 	gw := h.getGateway(gatewayID)
@@ -109,8 +113,13 @@ func (h *WebhookHandler) HandleGatewayWebhook(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		log.Printf("[WEBHOOK ERROR] Failed to verify webhook for gateway %s: %v", gw.ID(), err)
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status": "ignored", "error": "invalid payload"}`))
+		if gw.ID() == "BINANCE" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"status": "unauthorized", "error": "` + err.Error() + `"}`))
+		} else {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status": "ignored", "error": "invalid payload"}`))
+		}
 		return
 	}
 
@@ -133,5 +142,5 @@ func (h *WebhookHandler) HandleGatewayWebhook(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status": "ok"}`))
+	_, _ = w.Write([]byte(`{"status": "received"}`))
 }

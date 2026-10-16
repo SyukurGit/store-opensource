@@ -16,6 +16,7 @@ import (
 	"storeku/internal/database"
 	"storeku/internal/handler"
 	"storeku/internal/payment"
+	"storeku/internal/payment/binance"
 	"storeku/internal/payment/paymentg"
 	"storeku/internal/provider"
 	"storeku/internal/provider/digitalcore"
@@ -72,6 +73,10 @@ func main() {
 	paymentRegistry.Register(paymentGAdapter)
 	paymentRegistry.SetDefault("PAYMENTG")
 
+	binanceAdapter := binance.NewAdapter(cfg)
+	paymentRegistry.Register(binanceAdapter)
+	paymentRegistry.RegisterAlias("PAYMENTG_BINANCE", "BINANCE")
+
 	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
 	orderService.SetVoucherService(voucherService)
 	orderService.SetLocalProductRepo(localProductRepo)
@@ -117,6 +122,11 @@ func main() {
 	// System Health Check (For VPS Monitoring, Uptime Kuma, Cloudflare health checks)
 	r.Get("/health", publicHandler.HealthCheck)
 
+	// Direct Webhook Endpoints (supporting both /webhook/{gateway} and /api/webhook/{gateway})
+	r.Post("/webhook/{gateway}", webhookHandler.HandleGatewayWebhook)
+	r.Post("/webhook/paymentg", webhookHandler.HandlePaymentGWebhook)
+	r.Post("/payment/binance-webhook", webhookHandler.HandleGatewayWebhook)
+
 	// API Routes
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", publicHandler.HealthCheck)
@@ -136,6 +146,7 @@ func main() {
 		// Payment Gateways Webhook Receivers (Legacy & Unified Multi-Payment)
 		r.Post("/webhook/paymentg", webhookHandler.HandlePaymentGWebhook)
 		r.Post("/webhook/{gateway}", webhookHandler.HandleGatewayWebhook)
+		r.Post("/payment/binance-webhook", webhookHandler.HandleGatewayWebhook)
 
 		// Admin Auth
 		r.Post("/admin/login", adminHandler.Login)

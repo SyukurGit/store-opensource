@@ -36,6 +36,11 @@ func RunMigrations(db *sql.DB) error {
 			payment_gateway TEXT DEFAULT 'PAYMENTG',
 			payment_method TEXT DEFAULT 'QRIS',
 			payment_channel TEXT DEFAULT 'SHOPEEPAY',
+			crypto_amount_str TEXT DEFAULT '',
+			crypto_currency TEXT DEFAULT '',
+			binance_tx_id TEXT DEFAULT '',
+			binance_pay_id TEXT DEFAULT '',
+			binance_account_name TEXT DEFAULT '',
 			cost_at_checkout_usd REAL DEFAULT 0,
 			cost_at_fulfillment_usd REAL DEFAULT 0,
 			paid_at DATETIME,
@@ -207,6 +212,11 @@ func RunMigrations(db *sql.DB) error {
 		"ALTER TABLE product_overrides ADD COLUMN custom_description_en TEXT DEFAULT '';",
 		"ALTER TABLE product_overrides ADD COLUMN custom_terms_en TEXT DEFAULT '';",
 		"ALTER TABLE product_overrides ADD COLUMN custom_logo TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN crypto_amount_str TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN crypto_currency TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN binance_tx_id TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN binance_pay_id TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN binance_account_name TEXT DEFAULT '';",
 	}
 	for _, alterQ := range alterQueries {
 		_, _ = db.Exec(alterQ)
@@ -219,6 +229,7 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_orders_gateway ON orders(gateway_order_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_payment_gateway ON orders(payment_gateway);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_payment_method ON orders(payment_method);`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_binance_tx_id ON orders(binance_tx_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_product_overrides_active ON product_overrides(is_active);`,
