@@ -1,5 +1,6 @@
 .env
 /web/
+/scratch_fe/
 storeku-linux
 deploy/storeku-linux
 *.exe
