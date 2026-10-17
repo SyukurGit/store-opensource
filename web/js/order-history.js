@@ -607,11 +607,9 @@ window.DigimestCurrency = {
   format: function(amountIDR, amountUSD = 0) {
     const cur = this.getCurrency();
     if (cur === 'USD') {
-      let usdVal = Number(amountUSD);
-      if (!usdVal || usdVal <= 0) {
-        const rate = this.getRate();
-        usdVal = Number(amountIDR || 0) / rate;
-      }
+      const rate = this.getRate();
+      // Always compute retail USD from amountIDR (the single source of truth for final price & promo)
+      let usdVal = Number(amountIDR || 0) / rate;
       return '$' + usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     return new Intl.NumberFormat('id-ID', {

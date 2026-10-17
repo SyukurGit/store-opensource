@@ -277,6 +277,20 @@ func (s *CatalogService) GetPublicProducts(ctx context.Context, lang string) ([]
 		}
 		p.IsActive = true
 
+		// Preserve raw wholesale cost in BasePriceUSD
+		p.BasePriceUSD = p.PriceUSD
+
+		// Calculate exact retail USD and reference strikethrough USD based on active rate
+		usdRate := 18000.0
+		if s.pricing != nil {
+			usdRate = s.pricing.GetUSDRate()
+		}
+		if usdRate <= 0 {
+			usdRate = 18000.0
+		}
+		p.PriceUSD = math.Round((float64(p.PriceIDR)/usdRate)*100.0) / 100.0
+		p.ReferencePriceUSD = math.Round((float64(p.ReferencePriceIDR)/usdRate)*100.0) / 100.0
+
 		// Apply multilingual translation if requested
 		if lang == "en" {
 			ApplyLanguageToProduct(&p, "en")
@@ -435,6 +449,20 @@ func (s *CatalogService) saveToPersistentDB(prods []*models.Product) {
 			tiers_json = excluded.tiers_json,
 			last_fetched_at = CURRENT_TIMESTAMP
 	`
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Printf("[CATALOG DB ERROR] Failed to begin transaction for cached_products: %v", err)
+		return
+	}
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		_ = tx.Rollback()
+		log.Printf("[CATALOG DB ERROR] Failed to prepare statement for cached_products: %v", err)
+		return
+	}
+	defer stmt.Close()
+
 	for _, p := range prods {
 		if p.Source == "LOCAL" {
 			continue // Local products are stored in local_products table
@@ -445,7 +473,10 @@ func (s *CatalogService) saveToPersistentDB(prods []*models.Product) {
 			stockCappedInt = 1
 		}
 		tiersBytes, _ := json.Marshal(p.Tiers)
-		_, _ = s.db.Exec(query, p.Slug, rawIDStr, p.Name, p.Type, p.Logo, p.Region, p.Stock, stockCappedInt, p.Warranty, p.Description, p.PriceUSD, string(tiersBytes))
+		_, _ = stmt.Exec(p.Slug, rawIDStr, p.Name, p.Type, p.Logo, p.Region, p.Stock, stockCappedInt, p.Warranty, p.Description, p.PriceUSD, string(tiersBytes))
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[CATALOG DB ERROR] Failed to commit batch cached_products: %v", err)
 	}
 }
 

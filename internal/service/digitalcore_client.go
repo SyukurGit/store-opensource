@@ -144,6 +144,20 @@ func (c *DigitalCoreClient) saveProductsToDB(rawProds []DigitalCoreRawProduct) {
 			tiers_json = excluded.tiers_json,
 			last_fetched_at = CURRENT_TIMESTAMP
 	`
+
+	tx, err := c.db.Begin()
+	if err != nil {
+		log.Printf("[DIGITALCORE DB ERROR] Failed to begin transaction: %v", err)
+		return
+	}
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		_ = tx.Rollback()
+		log.Printf("[DIGITALCORE DB ERROR] Failed to prepare statement: %v", err)
+		return
+	}
+	defer stmt.Close()
+
 	for _, p := range rawProds {
 		slug := toSlug(p.Name)
 		tiersBytes, _ := json.Marshal(p.Tiers)
@@ -160,7 +174,10 @@ func (c *DigitalCoreClient) saveProductsToDB(rawProds []DigitalCoreRawProduct) {
 				logoURL = fmt.Sprintf("%s%s", strings.TrimRight(c.cfg.DigitalCoreBaseURL, "/"), p.Logo)
 			}
 		}
-		_, _ = c.db.Exec(query, slug, rawIDStr, p.Name, p.Type, logoURL, p.Region, p.Stock, stockCappedInt, p.Warranty, p.Desc, p.PriceFrom, string(tiersBytes))
+		_, _ = stmt.Exec(slug, rawIDStr, p.Name, p.Type, logoURL, p.Region, p.Stock, stockCappedInt, p.Warranty, p.Desc, p.PriceFrom, string(tiersBytes))
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[DIGITALCORE DB ERROR] Failed to commit batch: %v", err)
 	}
 }
 

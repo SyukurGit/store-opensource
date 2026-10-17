@@ -75,10 +75,12 @@ type Product struct {
 	CustomWarranty    string        `json:"customWarranty,omitempty"`
 	Description       string        `json:"description"`
 	Terms             string        `json:"terms"`
+	BasePriceUSD      float64       `json:"basePriceUSD,omitempty"`
 	PriceUSD          float64       `json:"priceUSD"`
 	ModalIDR          int64         `json:"modalIDR"`
 	PriceIDR          int64         `json:"priceIDR"`
 	ReferencePriceIDR int64         `json:"referencePriceIDR"`
+	ReferencePriceUSD float64       `json:"referencePriceUSD,omitempty"`
 	PromoPriceIDR     int64         `json:"promoPriceIDR"`
 	HasPromo          bool          `json:"hasPromo"`
 	DiscountPercent   int           `json:"discountPercent"`

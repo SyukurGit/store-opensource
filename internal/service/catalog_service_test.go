@@ -133,3 +133,85 @@ func TestCatalogService_PrewarmCache_NoDeadlock(t *testing.T) {
 		t.Fatalf("DEADLOCK DETECTED! PrewarmCache blocked for > 2s on SQLite connection pool!")
 	}
 }
+
+func TestCatalogService_PromoPricingUSD_ReflectsPromoDiscount(t *testing.T) {
+	db, err := database.InitDB(":memory:")
+	if err != nil {
+		t.Fatalf("Failed to init memory db: %v", err)
+	}
+	defer db.Close()
+
+	// Insert setting usd_rate = 18000
+	_, _ = db.Exec(`INSERT INTO settings (key, value) VALUES ('usd_rate', '18000')`)
+	// Insert override with promo price
+	// Raw wholesale cost was $1.00 (Rp 18.000 modal)
+	// Normal retail custom price = Rp 36.000 ($2.00)
+	// Promo discount price = Rp 27.000 ($1.50)
+	overrideQuery := `
+		INSERT INTO product_overrides (product_slug, is_active, custom_price_idr, promo_price_idr, baseline_modal_idr)
+		VALUES ('test-promo-prod', 1, 36000, 27000, 18000)
+	`
+	if _, err := db.Exec(overrideQuery); err != nil {
+		t.Fatalf("Failed to insert override: %v", err)
+	}
+
+	cachedQuery := `
+		INSERT INTO cached_products (slug, raw_id, name, type, logo, region, stock, stock_capped, warranty, description, price_usd, tiers_json)
+		VALUES ('test-promo-prod', 'raw-1', 'Test Promo Product', 'License', '', 'Global', 10, 0, '1 Bulan', 'Desc', 1.0, '[]')
+	`
+	if _, err := db.Exec(cachedQuery); err != nil {
+		t.Fatalf("Failed to insert cached product: %v", err)
+	}
+
+	settingRepo := repository.NewSettingRepository(db)
+	overrideRepo := repository.NewProductOverrideRepository(db)
+	pricing := NewPricingService(nil, settingRepo)
+	reg := provider.NewRegistry()
+
+	svc := NewCatalogService(reg, pricing, overrideRepo, settingRepo, db)
+
+	ctx := context.Background()
+	products, err := svc.GetPublicProducts(ctx, "id")
+	if err != nil {
+		t.Fatalf("GetPublicProducts failed: %v", err)
+	}
+
+	if len(products) != 1 {
+		t.Fatalf("Expected 1 product, got %d", len(products))
+	}
+
+	p := products[0]
+	if !p.HasPromo {
+		t.Errorf("Expected HasPromo=true, got false")
+	}
+
+	// PriceIDR should be promo price (27000)
+	if p.PriceIDR != 27000 {
+		t.Errorf("Expected PriceIDR=27000, got %d", p.PriceIDR)
+	}
+
+	// ReferencePriceIDR should be 36000
+	if p.ReferencePriceIDR != 36000 {
+		t.Errorf("Expected ReferencePriceIDR=36000, got %d", p.ReferencePriceIDR)
+	}
+
+	// CRITICAL CHECK: In USD mode, PriceUSD MUST be 27000/18000 = $1.50, NOT the wholesale cost $1.00!
+	expectedPriceUSD := 1.50
+	if p.PriceUSD != expectedPriceUSD {
+		t.Errorf("CRITICAL BUG: PriceUSD must be final promo price %.2f, but got %.2f (wholesale base price!)", expectedPriceUSD, p.PriceUSD)
+	}
+
+	// ReferencePriceUSD MUST be 36000/18000 = $2.00
+	expectedRefUSD := 2.00
+	if p.ReferencePriceUSD != expectedRefUSD {
+		t.Errorf("ReferencePriceUSD must be %.2f, got %.2f", expectedRefUSD, p.ReferencePriceUSD)
+	}
+
+	// BasePriceUSD must preserve the raw wholesale cost $1.00
+	if p.BasePriceUSD != 1.00 {
+		t.Errorf("BasePriceUSD must preserve raw cost 1.00, got %.2f", p.BasePriceUSD)
+	}
+
+	t.Logf("SUCCESS: Promo Product in USD mode verified: Promo PriceUSD=$%.2f (was NOT reverted to base modal cost $%.2f), RefPriceUSD=$%.2f",
+		p.PriceUSD, p.BasePriceUSD, p.ReferencePriceUSD)
+}

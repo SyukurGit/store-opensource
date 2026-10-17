@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -284,13 +285,39 @@ func main() {
 
 	// Clean Public Page Handlers
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		// Respect explicit user language choice (ID)
+		// 1. Respect explicit user language choice via cookie
 		cookie, err := r.Cookie("digimest_lang")
-		if err == nil && cookie.Value == "id" {
+		if err == nil {
+			if cookie.Value == "id" {
+				http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+				return
+			}
+			if cookie.Value == "en" {
+				dest := "/en/"
+				if r.URL.RawQuery != "" {
+					dest += "?" + r.URL.RawQuery
+				}
+				http.Redirect(w, r, dest, http.StatusFound)
+				return
+			}
+		}
+
+		// 2. Detect client country from simulator or Cloudflare CDN headers
+		clientCountry := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("simulate_country")))
+		if clientCountry == "" {
+			clientCountry = strings.ToUpper(strings.TrimSpace(r.Header.Get("CF-IPCountry")))
+		}
+		if clientCountry == "" {
+			clientCountry = strings.ToUpper(strings.TrimSpace(r.Header.Get("X-Country-Code")))
+		}
+
+		// 3. If visitor is from Indonesia, serve index.html directly (0ms redirect)
+		if clientCountry == "ID" {
 			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
 			return
 		}
-		// Default to English for international & default landing
+
+		// 4. Default to English for international visitors
 		dest := "/en/"
 		if r.URL.RawQuery != "" {
 			dest += "?" + r.URL.RawQuery

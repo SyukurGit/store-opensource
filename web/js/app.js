@@ -101,13 +101,13 @@ function renderProducts(products) {
           <div class="price-wrap">
             ${p.hasPromo ? `
               <div class="price-strike-wrap">
-                <span class="price-original-striked">${formatCurrency(p.referencePriceIDR, p.referencePriceUSD)}</span>
+                <span class="price-original-striked">${formatCurrency(p.referencePriceIDR)}</span>
                 <span class="badge-discount-mini">-${p.discountPercent}%</span>
               </div>
-              <span class="price-amount promo-highlight">${formatCurrency(p.priceIDR, p.priceUSD)}</span>
+              <span class="price-amount promo-highlight">${formatCurrency(p.priceIDR)}</span>
             ` : `
               <span class="price-label">${isEn ? 'Starting From' : 'Mulai Dari'}</span>
-              <span class="price-amount">${formatCurrency(p.priceIDR, p.priceUSD)}</span>
+              <span class="price-amount">${formatCurrency(p.priceIDR)}</span>
             `}
           </div>
           <button class="btn-buy btn-buy-catalog ${isOut ? 'btn-buy-out' : ''}" onclick="event.stopPropagation(); window.location.href='${prodLink}'">

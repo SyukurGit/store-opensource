@@ -235,7 +235,17 @@ function renderPendingView(order) {
     if (qrisBox) qrisBox.style.display = 'block';
 
     const amtText = document.getElementById('totalAmountText');
-    if (amtText) amtText.textContent = formatIDR(order.total_amount);
+    if (amtText) {
+      const cur = window.DigimestCurrency ? window.DigimestCurrency.getCurrency() : 'IDR';
+      const idrFormatted = 'Rp ' + Number(order.total_amount || 0).toLocaleString('id-ID');
+      if (cur === 'USD' && window.DigimestCurrency) {
+        const rate = window.DigimestCurrency.getRate();
+        const usdVal = (Number(order.total_amount || 0) / rate).toFixed(2);
+        amtText.textContent = `${idrFormatted} (~$${usdVal})`;
+      } else {
+        amtText.textContent = idrFormatted;
+      }
+    }
 
     if (order.qr_url) {
       const qrisImg = document.getElementById('qrisImage');

@@ -177,8 +177,9 @@ function renderReviewsSection(stats, reviews) {
   const avgEl = document.getElementById('dRatingAvgText');
   if (avgEl) avgEl.textContent = avg.toFixed(1);
 
+  const isEn = (document.documentElement && document.documentElement.lang === 'en') || window.location.pathname.startsWith('/en');
   const countEl = document.getElementById('dRatingCountText');
-  if (countEl) countEl.textContent = `(${count} ulasan)`;
+  if (countEl) countEl.textContent = isEn ? `(${count} reviews)` : `(${count} ulasan)`;
 
   const scoreBig = document.getElementById('revOverallScore');
   if (scoreBig) scoreBig.textContent = avg.toFixed(1);
@@ -187,7 +188,7 @@ function renderReviewsSection(stats, reviews) {
   if (overallStars) overallStars.textContent = getStarString(avg);
 
   const overallCount = document.getElementById('revOverallCount');
-  if (overallCount) overallCount.textContent = `Berdasarkan ${count} ulasan`;
+  if (overallCount) overallCount.textContent = isEn ? `Based on ${count} reviews` : `Berdasarkan ${count} ulasan`;
 
   // Star breakdown bars
   const barsWrap = document.getElementById('revBreakdownBars');
@@ -837,16 +838,21 @@ async function submitCheckout() {
   }
 
   const isBinance = (selectedPaymentMethod === 'BINANCE_PAY');
+  const isBep20 = (selectedPaymentGateway === 'USDT_BEP20' || selectedPaymentMethod === 'CRYPTO');
   btn.disabled = true;
   if (isBinance) {
     btn.innerText = isEn ? 'Preparing Binance Pay...' : 'Menyiapkan Binance Pay (USDT)...';
+  } else if (isBep20) {
+    btn.innerText = isEn ? 'Preparing USDT (BEP-20)...' : 'Menyiapkan USDT (BEP-20)...';
   } else {
     btn.innerText = isEn ? 'Preparing Instant QRIS...' : 'Menyiapkan QRIS ShopeePay...';
   }
 
   const defaultBtnText = isBinance 
     ? (isEn ? 'Pay Now via Binance Pay ➔' : 'Bayar Sekarang via Binance Pay ➔')
-    : (isEn ? 'Pay Now via QRIS ➔' : 'Bayar Sekarang via QRIS ➔');
+    : (isBep20
+        ? (isEn ? 'Pay Now via USDT (BEP-20) ➔' : 'Bayar Sekarang via USDT (BEP-20) ➔')
+        : (isEn ? 'Pay Now via QRIS ➔' : 'Bayar Sekarang via QRIS ➔'));
 
   try {
     const checkoutUrl = window.digimestApi ? window.digimestApi('/api/checkout') : '/api/checkout';
@@ -934,11 +940,11 @@ window.addEventListener('currencychange', () => {
     if (currentProduct.hasPromo) {
       if (promoStrikeWrap) {
         const dStrike = document.getElementById('dStrikedPrice');
-        if (dStrike) dStrike.textContent = formatCurrency(currentProduct.referencePriceIDR, currentProduct.referencePriceUSD);
+        if (dStrike) dStrike.textContent = formatCurrency(currentProduct.referencePriceIDR);
       }
       if (stickyStrikeWrap) {
         const mStrike = document.getElementById('mStickyStrikedPrice');
-        if (mStrike) mStrike.textContent = formatCurrency(currentProduct.referencePriceIDR, currentProduct.referencePriceUSD);
+        if (mStrike) mStrike.textContent = formatCurrency(currentProduct.referencePriceIDR);
       }
     }
     updateCalculations();
