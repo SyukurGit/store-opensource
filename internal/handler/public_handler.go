@@ -87,15 +87,26 @@ func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Detect client country code from Cloudflare / CDN proxy headers or test query simulator
+	clientCountry := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("simulate_country")))
+	if clientCountry == "" {
+		clientCountry = strings.ToUpper(strings.TrimSpace(r.Header.Get("CF-IPCountry")))
+	}
+	if clientCountry == "" {
+		clientCountry = strings.ToUpper(strings.TrimSpace(r.Header.Get("X-Country-Code")))
+	}
+
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success":           true,
 		"telegram_username": username,
 		"telegram_url":      fmt.Sprintf("https://t.me/%s", username),
 		"usd_rate":          usdRate,
+		"client_country":    clientCountry,
 		"data": map[string]interface{}{
 			"telegram_username": username,
 			"telegram_url":      fmt.Sprintf("https://t.me/%s", username),
 			"usd_rate":          usdRate,
+			"client_country":    clientCountry,
 		},
 	})
 }
