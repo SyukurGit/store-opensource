@@ -95,6 +95,8 @@ func (h *WebhookHandler) HandleGatewayWebhook(w http.ResponseWriter, r *http.Req
 	if gatewayID == "" {
 		if strings.Contains(r.URL.Path, "binance") {
 			gatewayID = "BINANCE"
+		} else if strings.Contains(r.URL.Path, "bep20") {
+			gatewayID = "USDT_BEP20"
 		} else {
 			gatewayID = "PAYMENTG"
 		}
@@ -113,7 +115,7 @@ func (h *WebhookHandler) HandleGatewayWebhook(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		log.Printf("[WEBHOOK ERROR] Failed to verify webhook for gateway %s: %v", gw.ID(), err)
 		w.Header().Set("Content-Type", "application/json")
-		if gw.ID() == "BINANCE" {
+		if gw.ID() == "BINANCE" || gw.ID() == "USDT_BEP20" {
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{"status": "unauthorized", "error": "` + err.Error() + `"}`))
 		} else {

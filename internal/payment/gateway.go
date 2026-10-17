@@ -47,6 +47,10 @@ type PaymentResponse struct {
 	BinancePayID       string
 	BinanceAccountName string
 	BinanceUniQRURL    string
+	WalletAddress      string
+	TokenContract      string
+	Network            string
+	CexWarning         string
 	QRURL              string
 	PaymentURL         string
 	ExpiresAt          *time.Time

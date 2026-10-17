@@ -16,6 +16,7 @@ import (
 	"storeku/internal/database"
 	"storeku/internal/handler"
 	"storeku/internal/payment"
+	"storeku/internal/payment/bep20"
 	"storeku/internal/payment/binance"
 	"storeku/internal/payment/paymentg"
 	"storeku/internal/provider"
@@ -77,6 +78,11 @@ func main() {
 	paymentRegistry.Register(binanceAdapter)
 	paymentRegistry.RegisterAlias("PAYMENTG_BINANCE", "BINANCE")
 
+	bep20Adapter := bep20.NewAdapter(cfg)
+	paymentRegistry.Register(bep20Adapter)
+	paymentRegistry.RegisterAlias("PAYMENTG_BEP20", "USDT_BEP20")
+	paymentRegistry.RegisterAlias("BEP20", "USDT_BEP20")
+
 	orderService := service.NewOrderService(orderRepo, pricingService, dcClient, pgClient, resendService)
 	orderService.SetVoucherService(voucherService)
 	orderService.SetLocalProductRepo(localProductRepo)
@@ -125,6 +131,8 @@ func main() {
 	// Direct Webhook Endpoints (supporting both /webhook/{gateway} and /api/webhook/{gateway})
 	r.Post("/webhook/{gateway}", webhookHandler.HandleGatewayWebhook)
 	r.Post("/webhook/paymentg", webhookHandler.HandlePaymentGWebhook)
+	r.Post("/webhook/bep20", webhookHandler.HandleGatewayWebhook)
+	r.Post("/webhook/usdt_bep20", webhookHandler.HandleGatewayWebhook)
 	r.Post("/payment/binance-webhook", webhookHandler.HandleGatewayWebhook)
 
 	// API Routes
@@ -146,6 +154,9 @@ func main() {
 		// Payment Gateways Webhook Receivers (Legacy & Unified Multi-Payment)
 		r.Post("/webhook/paymentg", webhookHandler.HandlePaymentGWebhook)
 		r.Post("/webhook/{gateway}", webhookHandler.HandleGatewayWebhook)
+		r.Post("/webhook/bep20", webhookHandler.HandleGatewayWebhook)
+		r.Post("/webhook/usdt_bep20", webhookHandler.HandleGatewayWebhook)
+		r.Post("/webhooks/paymentg", webhookHandler.HandleGatewayWebhook)
 		r.Post("/payment/binance-webhook", webhookHandler.HandleGatewayWebhook)
 
 		// Admin Auth

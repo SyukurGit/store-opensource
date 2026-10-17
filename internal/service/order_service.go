@@ -247,7 +247,11 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 	// 4. Request payment invoice from active gateway (PaymentG or multi-payment)
 	gwID := req.PaymentGateway
 	if gwID == "" && (req.PaymentMethod == "BINANCE_PAY" || req.PaymentMethod == "CRYPTO") {
-		gwID = "BINANCE"
+		if req.PaymentChannel == "BEP20" || req.PaymentChannel == "USDT_BEP20" {
+			gwID = "USDT_BEP20"
+		} else {
+			gwID = "BINANCE"
+		}
 	}
 	gw, err := s.getPaymentGateway(gwID)
 	if err != nil {
@@ -275,8 +279,8 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		payReq.Channel = req.PaymentChannel
 	}
 
-	// Calculate crypto amount if paying via Binance Pay or Crypto
-	if payReq.Method == payment.MethodBinancePay || payReq.Method == payment.MethodCrypto || gw.ID() == "BINANCE" {
+	// Calculate crypto amount if paying via Binance Pay or Crypto (BEP-20)
+	if payReq.Method == payment.MethodBinancePay || payReq.Method == payment.MethodCrypto || gw.ID() == "BINANCE" || gw.ID() == "USDT_BEP20" {
 		usdRate := s.pricing.GetUSDRate()
 		if usdRate <= 0 {
 			usdRate = 18000.0
@@ -288,7 +292,11 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		payReq.AmountCrypto = amountUSDT
 		payReq.Currency = "USDT"
 		if payReq.Channel == "" || payReq.Channel == "SHOPEEPAY" {
-			payReq.Channel = "USDT"
+			if gw.ID() == "USDT_BEP20" {
+				payReq.Channel = "BEP20"
+			} else {
+				payReq.Channel = "USDT"
+			}
 		}
 	}
 
@@ -324,6 +332,10 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		CryptoCurrency:     payResp.CryptoCurrency,
 		BinancePayID:       payResp.BinancePayID,
 		BinanceAccountName: payResp.BinanceAccountName,
+		WalletAddress:      payResp.WalletAddress,
+		TokenContract:      payResp.TokenContract,
+		Network:            payResp.Network,
+		CexWarning:         payResp.CexWarning,
 		VoucherCode:        appliedVoucherCode,
 		DiscountIDR:        discountIDR,
 		GatewayOrderID:     payResp.GatewayOrderID,
@@ -356,6 +368,10 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		CryptoCurrency:     payResp.CryptoCurrency,
 		BinancePayID:       payResp.BinancePayID,
 		BinanceAccountName: payResp.BinanceAccountName,
+		WalletAddress:      payResp.WalletAddress,
+		TokenContract:      payResp.TokenContract,
+		Network:            payResp.Network,
+		CexWarning:         payResp.CexWarning,
 		VoucherCode:        appliedVoucherCode,
 		DiscountIDR:        discountIDR,
 		GatewayOrderID:     payResp.GatewayOrderID,
@@ -407,6 +423,11 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 		BinanceTxID:        order.BinanceTxID,
 		BinancePayID:       order.BinancePayID,
 		BinanceAccountName: order.BinanceAccountName,
+		WalletAddress:      order.WalletAddress,
+		TokenContract:      order.TokenContract,
+		Network:            order.Network,
+		TxHash:             order.TxHash,
+		CexWarning:         order.CexWarning,
 		PaymentStatus:      order.PaymentStatus,
 		FulfillmentStatus:  order.FulfillmentStatus,
 		QRURL:              order.QRURL,

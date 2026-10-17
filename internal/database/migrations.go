@@ -41,6 +41,11 @@ func RunMigrations(db *sql.DB) error {
 			binance_tx_id TEXT DEFAULT '',
 			binance_pay_id TEXT DEFAULT '',
 			binance_account_name TEXT DEFAULT '',
+			wallet_address TEXT DEFAULT '',
+			token_contract TEXT DEFAULT '',
+			network TEXT DEFAULT '',
+			tx_hash TEXT DEFAULT '',
+			cex_warning TEXT DEFAULT '',
 			cost_at_checkout_usd REAL DEFAULT 0,
 			cost_at_fulfillment_usd REAL DEFAULT 0,
 			paid_at DATETIME,
@@ -217,6 +222,11 @@ func RunMigrations(db *sql.DB) error {
 		"ALTER TABLE orders ADD COLUMN binance_tx_id TEXT DEFAULT '';",
 		"ALTER TABLE orders ADD COLUMN binance_pay_id TEXT DEFAULT '';",
 		"ALTER TABLE orders ADD COLUMN binance_account_name TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN wallet_address TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN token_contract TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN network TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN tx_hash TEXT DEFAULT '';",
+		"ALTER TABLE orders ADD COLUMN cex_warning TEXT DEFAULT '';",
 	}
 	for _, alterQ := range alterQueries {
 		_, _ = db.Exec(alterQ)
@@ -230,6 +240,7 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_orders_payment_gateway ON orders(payment_gateway);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_payment_method ON orders(payment_method);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_binance_tx_id ON orders(binance_tx_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_tx_hash ON orders(tx_hash);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_product_overrides_active ON product_overrides(is_active);`,

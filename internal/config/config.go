@@ -30,6 +30,8 @@ type Config struct {
 	SilvexAPIKey            string
 	PaymentGBinanceAPIURL   string
 	PaymentGBinanceAPIKey   string
+	PaymentGBEP20APIURL     string
+	PaymentGBEP20APIKey     string
 }
 
 func LoadConfig() *Config {
@@ -47,6 +49,8 @@ func LoadConfig() *Config {
 		PaymentGAPIKey:          getEnv("PAYMENTG_API_KEY", ""),
 		PaymentGBinanceAPIURL:   getEnv("PAYMENTG_BINANCE_API_URL", "http://localhost:3300/api/sandbox"),
 		PaymentGBinanceAPIKey:   getEnv("PAYMENTG_BINANCE_API_KEY", getEnv("PAYMENTG_API_KEY", "")),
+		PaymentGBEP20APIURL:     getEnv("PAYMENTG_BEP20_API_URL", getEnv("PAYMENTG_BEP20_BASE_URL", getEnv("PAYMENTG_BASE_URL", "http://localhost:3400"))),
+		PaymentGBEP20APIKey:     getEnv("PAYMENTG_BEP20_API_KEY", getEnv("PAYMENTG_API_KEY", "")),
 		AdminUsername:           getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:           getEnv("ADMIN_PASSWORD", "admin123"),
 		AdminSecretKey:          getEnv("ADMIN_SECRET_KEY", "storeku_default_secret_key"),

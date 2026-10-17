@@ -25,6 +25,11 @@ type Order struct {
 	BinanceTxID         string     `json:"binance_tx_id,omitempty"`
 	BinancePayID        string     `json:"binance_pay_id,omitempty"`
 	BinanceAccountName  string     `json:"binance_account_name,omitempty"`
+	WalletAddress       string     `json:"wallet_address,omitempty"`
+	TokenContract       string     `json:"token_contract,omitempty"`
+	Network             string     `json:"network,omitempty"`
+	TxHash              string     `json:"tx_hash,omitempty"`
+	CexWarning          string     `json:"cex_warning,omitempty"`
 	QRURL               string     `json:"qr_url"`
 	PaymentStatus       string     `json:"payment_status"`     // PENDING, PAID, EXPIRED, CANCELLED
 	FulfillmentStatus   string     `json:"fulfillment_status"` // PENDING, SUCCESS, FAILED
@@ -350,6 +355,10 @@ type CheckoutResponse struct {
 	CryptoCurrency     string `json:"crypto_currency,omitempty"`
 	BinancePayID       string `json:"binance_pay_id,omitempty"`
 	BinanceAccountName string `json:"binance_account_name,omitempty"`
+	WalletAddress      string `json:"wallet_address,omitempty"`
+	TokenContract      string `json:"token_contract,omitempty"`
+	Network            string `json:"network,omitempty"`
+	CexWarning         string `json:"cex_warning,omitempty"`
 	QRURL              string `json:"qr_url"`
 	ExpiresAt          string `json:"expires_at"`
 	ExpiresInSeconds   int    `json:"expires_in_seconds"`
@@ -372,6 +381,11 @@ type OrderStatusResponse struct {
 	BinanceTxID         string   `json:"binance_tx_id,omitempty"`
 	BinancePayID        string   `json:"binance_pay_id,omitempty"`
 	BinanceAccountName  string   `json:"binance_account_name,omitempty"`
+	WalletAddress       string   `json:"wallet_address,omitempty"`
+	TokenContract       string   `json:"token_contract,omitempty"`
+	Network             string   `json:"network,omitempty"`
+	TxHash              string   `json:"tx_hash,omitempty"`
+	CexWarning          string   `json:"cex_warning,omitempty"`
 	FulfillmentStatus   string   `json:"fulfillment_status"`
 	QRURL               string   `json:"qr_url"`
 	DeliveredItems      []string `json:"delivered_items,omitempty"`
