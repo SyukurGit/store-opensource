@@ -1,0 +1,584 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Details - Digimest</title>
+  <link rel="icon" type="image/png" href="/logo/digimest_icon.png">
+  <link rel="apple-touch-icon" href="/logo/digimest_icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <link rel="stylesheet" href="/css/style.css?v=5.9.5">
+  <script src="/js/api-config.js?v=5.9.5"></script>
+</head>
+<body class="has-sticky-bar detail-page-body">
+
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="/en/" class="logo-wrap" title="Digimest - Home">
+        <img src="/logo/digimest.png" alt="Digimest" class="logo-navbar-img">
+      </a>
+      <div class="nav-actions">
+        <a href="/en/" class="btn-nav nav-desktop-item">
+          <span class="nav-text-desktop">← Back to Catalog</span>
+        </a>
+        <a href="https://t.me/Digimestsupport?text=Hello%20Digimest%2C%20I%20am%20interested%20in%20becoming%20a%20Reseller" target="_blank" rel="noopener noreferrer" class="btn-nav btn-reseller" data-tele-nav-reseller>
+          🤝 Join Reseller <span class="reseller-tag">Wholesale Prices</span>
+        </a>
+        <button id="btnOpenHistory" class="btn-nav nav-desktop-item">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span class="nav-text-desktop">My Orders</span>
+          <span id="historyBadge" class="badge-counter" style="display:none;">0</span>
+        </button>
+        <a href="/en/claim" class="btn-nav nav-desktop-item">
+          <span class="nav-text-desktop">🔑 Claim License</span>
+        </a>
+
+        <!-- Currency Dropdown (Desktop Only) -->
+        <div class="currency-dropdown-wrap nav-desktop-item">
+          <button type="button" class="currency-btn" id="currencyDropdownBtn" aria-label="Select Currency">
+            <span class="currency-symbol-icon">$</span>
+            <span class="currency-code" id="desktopCurrencyCode">USD</span>
+            <span class="currency-arrow">▾</span>
+          </button>
+          <div class="currency-menu" id="currencyMenu">
+            <button type="button" class="currency-item active" data-currency="USD">
+              <span class="currency-item-symbol">$</span>
+              <span class="currency-item-name">USD (Dollar)</span>
+              <span class="currency-check">✓</span>
+            </button>
+            <button type="button" class="currency-item" data-currency="IDR">
+              <span class="currency-item-symbol">Rp</span>
+              <span class="currency-item-name">IDR (Rupiah)</span>
+              <span class="currency-check" style="visibility: hidden;">✓</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Language Dropdown (Desktop & Mobile) -->
+        <div class="lang-dropdown-wrap">
+          <button type="button" class="lang-btn" id="langDropdownBtn" aria-label="Select Language">
+            <svg class="svg-flag" viewBox="0 0 60 40" aria-hidden="true"><rect width="60" height="40" fill="#012169"/><path d="M0 0L60 40M60 0L0 40" stroke="#ffffff" stroke-width="8"/><path d="M0 0L60 40M60 0L0 40" stroke="#c8102e" stroke-width="3.5"/><path d="M30 0V40M0 20H60" stroke="#ffffff" stroke-width="12"/><path d="M30 0V40M0 20H60" stroke="#c8102e" stroke-width="7"/></svg>
+            <span class="lang-code">EN</span>
+            <span class="lang-arrow">▾</span>
+          </button>
+          <div class="lang-menu" id="langMenu">
+            <button type="button" class="lang-item" data-lang="id">
+              <svg class="svg-flag" viewBox="0 0 60 40" aria-hidden="true"><rect width="60" height="20" fill="#e11d48"/><rect y="20" width="60" height="20" fill="#ffffff"/></svg>
+              <span class="lang-item-name">Indonesia</span>
+              <span class="lang-check" style="visibility: hidden;">✓</span>
+            </button>
+            <button type="button" class="lang-item active" data-lang="en">
+              <svg class="svg-flag" viewBox="0 0 60 40" aria-hidden="true"><rect width="60" height="40" fill="#012169"/><path d="M0 0L60 40M60 0L0 40" stroke="#ffffff" stroke-width="8"/><path d="M0 0L60 40M60 0L0 40" stroke="#c8102e" stroke-width="3.5"/><path d="M30 0V40M0 20H60" stroke="#ffffff" stroke-width="12"/><path d="M30 0V40M0 20H60" stroke="#c8102e" stroke-width="7"/></svg>
+              <span class="lang-item-name">English</span>
+              <span class="lang-check">✓</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Mobile Animated Hamburger Button -->
+        <button type="button" class="nav-hamburger-btn" id="navHamburgerBtn" aria-label="Open Menu">
+          <span class="hamburger-line line-1"></span>
+          <span class="hamburger-line line-2"></span>
+          <span class="hamburger-line line-3"></span>
+          <span id="hamburgerHistoryBadge" class="hamburger-badge-dot history-badge-count" style="display:none;"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Slide-Over Glass Navigation Drawer -->
+  <div class="mobile-drawer-overlay" id="mobileDrawerOverlay">
+    <div class="mobile-drawer-panel" id="mobileDrawerPanel">
+      <div class="drawer-header">
+        <a href="/en/" class="drawer-logo-wrap">
+          <img src="/logo/digimest.png" alt="Digimest" style="height: 28px; width: auto; object-fit: contain;">
+        </a>
+        <button type="button" class="drawer-close-btn" id="drawerCloseBtn" aria-label="Close Menu">
+          ✕
+        </button>
+      </div>
+
+      <div class="drawer-content">
+        <div class="drawer-nav-group">
+          <div class="drawer-group-label">Navigation</div>
+          <a href="/en/" class="drawer-nav-item">
+            <span class="drawer-item-icon">🛍️</span>
+            <span class="drawer-item-text">Product Catalog</span>
+          </a>
+          <a href="/en/claim" class="drawer-nav-item">
+            <span class="drawer-item-icon">🔑</span>
+            <span class="drawer-item-text">Claim License</span>
+          </a>
+          <button type="button" class="drawer-nav-item" id="drawerOpenHistoryBtn">
+            <span class="drawer-item-icon">📦</span>
+            <span class="drawer-item-text">Order History</span>
+            <span id="drawerHistoryBadge" class="badge-counter history-badge-count" style="display:none; margin-left: auto;">0</span>
+          </button>
+        </div>
+
+        <div class="drawer-nav-group">
+          <div class="drawer-group-label">Partnership & Support</div>
+          <a href="https://t.me/Digimestsupport?text=Hello%20Digimest%2C%20I%20am%20interested%20in%20becoming%20a%20Reseller" target="_blank" rel="noopener noreferrer" class="drawer-nav-item drawer-item-reseller" data-tele-drawer-reseller>
+            <span class="drawer-item-icon">🤝</span>
+            <div style="display: flex; flex-direction: column;">
+              <span class="drawer-item-text">Join Reseller</span>
+              <span style="font-size: 0.72rem; color: #fbbf24;">Wholesale Rates & Support ➔</span>
+            </div>
+          </a>
+          <a href="https://t.me/Digimestsupport" target="_blank" rel="noopener noreferrer" class="drawer-nav-item" data-tele-drawer-cs>
+            <span class="drawer-item-icon">💬</span>
+            <span class="drawer-item-text">Customer Support (Telegram)</span>
+          </a>
+        </div>
+
+        <div class="drawer-nav-group">
+          <div class="drawer-group-label">Language / Pilihan Bahasa</div>
+          <div class="drawer-lang-grid">
+            <button type="button" class="drawer-lang-btn" data-lang="id">
+              <span class="drawer-lang-left">
+                <svg class="svg-flag" viewBox="0 0 60 40" aria-hidden="true"><rect width="60" height="20" fill="#e11d48"/><rect y="20" width="60" height="20" fill="#ffffff"/></svg>
+                <span>Indonesia</span>
+              </span>
+              <span class="lang-check" style="visibility: hidden;">✓</span>
+            </button>
+            <button type="button" class="drawer-lang-btn active" data-lang="en">
+              <span class="drawer-lang-left">
+                <svg class="svg-flag" viewBox="0 0 60 40" aria-hidden="true"><rect width="60" height="40" fill="#012169"/><path d="M0 0L60 40M60 0L0 40" stroke="#ffffff" stroke-width="8"/><path d="M0 0L60 40M60 0L0 40" stroke="#c8102e" stroke-width="3.5"/><path d="M30 0V40M0 20H60" stroke="#ffffff" stroke-width="12"/><path d="M30 0V40M0 20H60" stroke="#c8102e" stroke-width="7"/></svg>
+                <span>English</span>
+              </span>
+              <span class="lang-check">✓</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="drawer-nav-group">
+          <div class="drawer-group-label">Currency / Mata Uang</div>
+          <div class="drawer-currency-grid">
+            <button type="button" class="drawer-currency-btn active" data-currency="USD">
+              <span class="drawer-currency-left">
+                <span class="currency-symbol-badge">$</span>
+                <span>USD (Dollar)</span>
+              </span>
+              <span class="currency-check">✓</span>
+            </button>
+            <button type="button" class="drawer-currency-btn" data-currency="IDR">
+              <span class="drawer-currency-left">
+                <span class="currency-symbol-badge">Rp</span>
+                <span>IDR (Rupiah)</span>
+              </span>
+              <span class="currency-check" style="visibility: hidden;">✓</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        <div>&copy; 2026 Digimest. 24/7 Digital Licenses.</div>
+      </div>
+    </div>
+  </div>
+
+  <main class="detail-container">
+    
+    <!-- Breadcrumb -->
+    <div class="breadcrumb-bar">
+      <a href="/en/">Home</a>
+      <span>/</span>
+      <a href="/en/">Product Catalog</a>
+      <span>/</span>
+      <span id="bcProductName" style="color: #fff; font-weight: 600;">Loading Product...</span>
+    </div>
+
+    <!-- Loading State -->
+    <div id="productLoading" style="text-align: center; padding: 4rem 1rem;">
+      <div style="font-size: 2.5rem; margin-bottom: 1rem; animation: pulse 1.5s infinite;">⚡</div>
+      <h3 style="color: #fff; font-size: 1.25rem;">Loading Product Details...</h3>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">Connecting to product server...</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="productError" style="display: none; text-align: center; padding: 4rem 1rem; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 20px;">
+      <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+      <h3 style="color: #f87171; font-size: 1.35rem; margin-bottom: 0.5rem;" id="errorTitle">Product Not Found</h3>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;" id="errorMessage">This product may have been suspended or the slug URL is invalid.</p>
+      <a href="/en/" class="btn-submit" style="display: inline-block; width: auto; padding: 0.75rem 2rem; text-decoration: none;">Back to Catalog</a>
+    </div>
+
+    <!-- Product Detail Layout -->
+    <div id="productDetailContent" class="product-detail-grid" style="display: none;">
+      
+      <!-- 1. Product Header Identity Card -->
+      <div class="detail-card-main detail-card-header" id="dBlockHeader">
+        <div class="detail-header-flex">
+          <img id="dProdLogo" src="" alt="" class="detail-big-logo" onerror="this.src='https://via.placeholder.com/76?text=DC'">
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+              <span id="dProdCategory" class="badge badge-region"></span>
+              <span id="dProdRegion" class="badge badge-region"></span>
+              <span id="dProdWarranty" class="badge badge-warranty"></span>
+              <span id="dProdStock" class="badge badge-stock"></span>
+            </div>
+            <h1 id="dProdTitle" class="detail-title"></h1>
+            <div class="detail-rating-sold-row" id="dRatingSoldRow">
+              <a href="#customerReviewsSection" class="detail-rating-link" id="dRatingLink" title="View customer reviews">
+                <span class="detail-stars-inline">⭐</span>
+                <strong id="dRatingAvgText">5.0</strong>
+                <span id="dRatingCountText" class="detail-rating-count">(0 reviews)</span>
+              </a>
+              <span class="detail-dot-sep">•</span>
+              <span class="detail-sold-text" id="dSoldText">10 sold</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Action Card (Checkout Box) -->
+      <div class="detail-card-main detail-sidebar-card" id="dBlockAction">
+        <!-- Row 1: Price and Stock Status -->
+        <div class="detail-action-top-row">
+          <div class="detail-action-price-box">
+            <div class="detail-price-label">Store Price</div>
+            <div id="dPromoStrikeWrap" class="price-strike-wrap" style="display: none; margin-bottom: 4px;">
+              <span id="dStrikedPrice" class="price-original-striked" style="font-size: 0.95rem;"></span>
+              <span id="dDiscountBadge" class="badge-discount-mini" style="font-size: 0.75rem;"></span>
+            </div>
+            <div id="dUnitPriceDisplay" class="detail-unit-price-val">
+              Rp 0
+            </div>
+          </div>
+          <div class="detail-action-stock-box">
+            <span id="dStockNote" class="detail-stock-badge">In Stock</span>
+          </div>
+        </div>
+
+        <!-- Row 2: Quantity Selection -->
+        <div class="detail-action-qty-row">
+          <label class="detail-action-qty-label" for="detailQtyInput">Purchase Quantity</label>
+          <div class="qty-stepper">
+            <button id="btnQtyMinus" class="qty-stepper-btn" type="button" aria-label="Decrease quantity">−</button>
+            <input type="number" id="detailQtyInput" class="qty-stepper-input" min="1" max="100" value="1">
+            <button id="btnQtyPlus" class="qty-stepper-btn" type="button" aria-label="Increase quantity">+</button>
+          </div>
+        </div>
+
+        <!-- Subtotal Box -->
+        <div class="order-summary-box detail-action-subtotal-box" style="margin-bottom: 1.5rem;">
+          <div class="summary-row">
+            <span>Subtotal (<span id="dQtySummary">1 item</span>)</span>
+            <span id="dSubtotalDisplay" style="font-weight: 700; color: #fff;">Rp 0</span>
+          </div>
+          <div class="summary-row">
+            <span>Payment Method</span>
+            <span style="color: #60a5fa; font-weight: 600;">QRIS, Binance & USDT</span>
+          </div>
+        </div>
+
+        <!-- Main Buy Button (Opens Checkout Modal) -->
+        <button id="btnOpenCheckoutFromDetail" class="btn-submit detail-buy-btn">
+          Buy Now ➔
+        </button>
+
+        <!-- Guarantee badges -->
+        <div class="detail-guarantee-list" style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 8px; font-size: 0.8rem; color: var(--text-muted);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: #10b981;">⚡</span> 24/7 Instant Automated License Delivery
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: #60a5fa;">💳</span> QRIS (All Banks/E-Wallets) & Binance Pay (USDT)
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: #a855f7;">✉️</span> Invoice & Claim Code Sent Directly to Email
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Product Content & Reviews Card -->
+      <div class="detail-card-main detail-card-content" id="dBlockContent">
+        <!-- Description Box -->
+        <div style="margin-bottom: 1.75rem;">
+          <h3 style="font-size: 1.05rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px;">
+            📝 Product Description & Features
+          </h3>
+          <div id="dProdDesc" style="color: #cbd5e1; font-size: 0.92rem; line-height: 1.7; white-space: pre-line; background: rgba(255,255,255,0.02); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-subtle);"></div>
+        </div>
+
+        <!-- Terms of Purchase Box -->
+        <div class="detail-terms-box">
+          <div class="detail-terms-title">
+            <span>📜</span>
+            <span>Terms of Purchase</span>
+          </div>
+          <div id="dProdTerms" class="detail-terms-text">
+            Purchase implies acceptance of all store terms.
+          </div>
+          <div style="margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8rem; color: #94a3b8;">
+            ✓ Account license / serial key is delivered immediately upon payment verification.<br>
+            ✓ Order invoice and claim details are automatically emailed to the buyer.<br>
+            ✓ Ensure your account or target region matches the stated product region.
+          </div>
+        </div>
+
+        <!-- Customer Reviews Section -->
+        <div class="detail-reviews-card" id="customerReviewsSection">
+          <div class="reviews-header">
+            <div class="reviews-header-title">
+              <span style="font-size: 1.35rem;">⭐</span>
+              <div>
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: #fff; margin: 0;">Customer Reviews & Ratings</h3>
+                <p style="color: var(--text-muted); font-size: 0.8rem; margin: 2px 0 0 0;">Authentic feedback from verified buyers</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notice Review Guide -->
+          <div class="reviews-notice-banner">
+            <div class="reviews-notice-badge">ℹ️ Review Info</div>
+            <div class="reviews-notice-text">
+              Want to leave a review? Please complete an order first. Once payment is verified, you can rate and review directly on your <a href="/en/claim" class="reviews-notice-link">order claim page</a>.
+            </div>
+          </div>
+
+          <div class="reviews-summary-grid">
+            <div class="reviews-score-box">
+              <div class="reviews-score-big" id="revOverallScore">5.0</div>
+              <div class="reviews-stars-row" id="revOverallStars">⭐⭐⭐⭐⭐</div>
+              <div class="reviews-count-sub" id="revOverallCount">Based on 0 reviews</div>
+            </div>
+            <div class="reviews-breakdown-bars" id="revBreakdownBars">
+              <!-- Injected dynamically via JS -->
+            </div>
+          </div>
+
+          <div class="reviews-list-wrap" id="reviewsListWrap">
+            <!-- Injected dynamically via JS -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Mobile Floating Sticky Bottom Buy Bar -->
+  <div class="mobile-sticky-buy-bar" id="mobileStickyBar">
+    <div class="mobile-sticky-price-wrap">
+      <div id="mStickyStrikeWrap" style="display: none; align-items: center; gap: 4px; margin-bottom: 2px;">
+        <span id="mStickyStrikedPrice" class="price-original-striked" style="font-size: 0.68rem;"></span>
+        <span id="mStickyDiscountBadge" class="badge-discount-mini" style="font-size: 0.58rem; padding: 0 3px;"></span>
+      </div>
+      <span class="mobile-sticky-label">Unit Price</span>
+      <span id="mStickyPrice" class="mobile-sticky-price">Rp 0</span>
+    </div>
+    <button id="btnStickyBuy" class="btn-submit mobile-sticky-btn">
+      Buy Now ➔
+    </button>
+  </div>
+
+  <!-- Modal Checkout QRIS -->
+  <div class="modal-overlay" id="checkoutModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Confirm Purchase</h3>
+        <button class="modal-close" id="closeCheckoutBtn">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Selected Product</label>
+        <div style="display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+          <img id="mProdLogo" src="" alt="" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover;">
+          <div style="flex: 1; min-width: 0;">
+            <div id="mProdName" style="font-weight: 700; color: #fff;"></div>
+            <div id="mProdType" style="font-size: 0.78rem; color: var(--text-muted);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quantity Stepper in Checkout Modal -->
+      <div class="form-group" style="margin-bottom: 1.15rem;">
+        <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Purchase Quantity</span>
+          <span id="mModalStockNote" style="color: #60a5fa; font-weight: 600; font-size: 0.8rem;">In Stock</span>
+        </label>
+        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+          <span style="font-size: 0.85rem; color: #94a3b8;">Set Quantity:</span>
+          <div class="qty-stepper">
+            <button id="btnModalQtyMinus" type="button" class="qty-stepper-btn">−</button>
+            <input type="number" id="modalQtyInput" class="qty-stepper-input" min="1" max="100" value="1">
+            <button id="btnModalQtyPlus" type="button" class="qty-stepper-btn">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="emailInput">Buyer Email <span style="color:#ef4444;">*</span> (Required for license delivery)</label>
+        <input type="email" id="emailInput" class="form-input" placeholder="e.g. name@gmail.com" required>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">License keys and purchase invoice will be sent automatically to this email.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="contactInput">Contact WhatsApp / Telegram (Optional)</label>
+        <input type="text" id="contactInput" class="form-input" placeholder="+123456789 or @username">
+      </div>
+
+      <!-- Voucher Promo Code Box -->
+      <div class="voucher-input-card" style="margin-bottom: 1.1rem; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-subtle); border-radius: 12px; padding: 12px;">
+        <label class="form-label" for="voucherInput" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span>🎟️ Have a Voucher Code?</span>
+          <span id="voucherStatusTag" style="font-size: 0.72rem; color: #10b981; font-weight: 600; display: none;"></span>
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="voucherInput" class="form-input" placeholder="Enter promo code" style="text-transform: uppercase; font-family: var(--font-mono); letter-spacing: 0.05em;" autocomplete="off">
+          <button type="button" id="btnApplyVoucher" class="btn-nav" style="white-space: nowrap; padding: 0 14px; font-weight: 600; border-color: rgba(99, 102, 241, 0.4); color: #818cf8; cursor: pointer;">Apply</button>
+          <button type="button" id="btnCancelVoucher" class="btn-nav" style="display: none; padding: 0 12px; color: #f87171; border-color: rgba(239, 68, 68, 0.3); cursor: pointer;" title="Remove voucher">✕</button>
+        </div>
+        <div id="voucherFeedback" style="font-size: 0.75rem; margin-top: 6px; display: none;"></div>
+      </div>
+
+      <!-- Payment Method Switcher -->
+      <div class="form-group" style="margin-bottom: 1.15rem;">
+        <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span>Select Payment Method</span>
+          <span id="mCurrencyBadge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 700;">IDR (Rupiah)</span>
+        </label>
+        <div class="payment-gateway-grid">
+          <div class="payment-method-card active" id="optPayQRIS" data-gateway="PAYMENTG" data-method="QRIS" data-channel="SHOPEEPAY">
+            <div class="payment-card-indicator">
+              <span class="payment-card-radio"></span>
+            </div>
+            <div class="payment-card-logo-wrap logo-qris-wrap">
+              <img src="/logo/kris.png" alt="QRIS" class="payment-card-logo-img">
+            </div>
+            <div class="payment-card-body">
+              <div class="payment-card-title">Instant QRIS (Multi-Bank)</div>
+              <div class="payment-card-desc">All Banks & E-Wallets • IDR</div>
+            </div>
+          </div>
+          <div class="payment-method-card" id="optPayBinance" data-gateway="BINANCE" data-method="BINANCE_PAY" data-channel="USDT">
+            <div class="payment-card-indicator">
+              <span class="payment-card-radio"></span>
+            </div>
+            <div class="payment-card-logo-wrap logo-binance-wrap">
+              <img src="/logo/binence.png" alt="Binance Pay" class="payment-card-logo-img">
+              <img src="/logo/usdt.png" alt="USDT" class="payment-card-subbadge-img">
+            </div>
+            <div class="payment-card-body">
+              <div class="payment-card-title">Binance Pay (Crypto)</div>
+              <div class="payment-card-desc">0% Gas Fee • USD / USDT</div>
+            </div>
+          </div>
+          <div class="payment-method-card" id="optPayBep20" data-gateway="USDT_BEP20" data-method="CRYPTO" data-channel="BEP20">
+            <div class="payment-card-indicator">
+              <span class="payment-card-radio"></span>
+            </div>
+            <div class="payment-card-logo-wrap logo-bep20-wrap">
+              <img src="/logo/usdt.png" alt="USDT BEP-20" class="payment-card-logo-img">
+            </div>
+            <div class="payment-card-body">
+              <div class="payment-card-title">USDT (BEP-20 / BSC)</div>
+              <div class="payment-card-desc">BNB Smart Chain • Low Gas • USD</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="order-summary-box">
+        <div class="summary-row">
+          <span>Unit Price</span>
+          <span id="mUnitPrice">Rp 0</span>
+        </div>
+        <div class="summary-row">
+          <span>Quantity</span>
+          <span id="mQtyDisplay">x 1</span>
+        </div>
+        <div class="summary-row" id="mVoucherRow" style="display: none; color: #10b981; font-weight: 600;">
+          <span>Voucher Discount (<span id="mVoucherCodeTag"></span>)</span>
+          <span id="mVoucherDiscountAmount">-Rp 0</span>
+        </div>
+        <div class="summary-row">
+          <span>Payment Method</span>
+          <span id="mSummaryPaymentMethod" style="color: #60a5fa; font-weight: 600;">Instant QRIS (Multi-Bank)</span>
+        </div>
+        <div class="summary-row" id="mSummaryUsdRateRow" style="display: none; color: #94a3b8; font-size: 0.8rem;">
+          <span>Conversion Rate</span>
+          <span>1 USD = Rp <span id="mSummaryUsdRate">18,000</span></span>
+        </div>
+        <div class="summary-row total">
+          <span>Estimated Total</span>
+          <span id="mTotalPrice" style="color: #10b981;">Rp 0</span>
+        </div>
+      </div>
+
+      <button id="btnConfirmCheckout" class="btn-submit">
+        Pay Now via QRIS ➔
+      </button>
+    </div>
+  </div>
+
+  <!-- Drawer / Modal Order History (LocalStorage) -->
+  <div class="modal-overlay" id="historyModal">
+    <div class="modal-card" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3 class="modal-title">My Order History</h3>
+        <button class="modal-close" id="closeHistoryBtn">&times;</button>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Your order history is securely stored in this browser without requiring an account. You can access or re-claim your licenses anytime.
+      </div>
+      <div id="historyListContainer" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 400px; overflow-y: auto;">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-streamlined-grid">
+        <!-- Col 1: Store Navigation -->
+        <div class="footer-col-links">
+          <h5>Store Navigation</h5>
+          <div class="footer-nav-links">
+            <a href="/en/">Catalog</a>
+            <a href="/en/claim">Claim License</a>
+            <a href="/en/how-to-buy">How to Buy</a>
+            <a href="/en/warranty">Warranty & Guarantee</a>
+            <a href="/en/privacy">Privacy Policy</a>
+            <a href="/en/terms">Terms of Service</a>
+            <a href="/en/about">About Us</a>
+          </div>
+        </div>
+
+        <!-- Col 2: Reseller & CS -->
+        <div class="footer-col-action">
+          <h5>Partnership & Support</h5>
+          <a href="https://t.me/Digimestsupport?text=Hello%20Digimest%2C%20I%20am%20interested%20in%20becoming%20a%20Reseller" target="_blank" rel="noopener noreferrer" class="footer-reseller-card" data-tele-reseller>
+            <div class="reseller-badge-mini">SPECIAL RATES</div>
+            <div class="reseller-title">🤝 Join Reseller</div>
+            <div class="reseller-sub">Get wholesale rates and dedicated support via Telegram ➔</div>
+          </a>
+          <a href="https://t.me/Digimestsupport" target="_blank" rel="noopener noreferrer" class="footer-cs-link" data-tele-cs>
+            💬 Telegram CS: @Digimestsupport
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-bottom-simple">
+        <div>&copy; 2026 Digimest. All rights reserved.</div>
+      </div>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast-notice"></div>
+  <script src="/js/order-history.js?v=5.9.5"></script>
+  <script src="/js/product.js?v=5.9.5"></script>
+</body>
+</html>

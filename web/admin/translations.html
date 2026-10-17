@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terjemahan Produk (EN) - Admin Digimest</title>
+  <link rel="icon" type="image/png" href="/logo/digimest_icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .trans-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0.25rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.76rem;
+      font-weight: 600;
+    }
+    .badge-trans-yes {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .badge-trans-no {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+    .dual-field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.1rem;
+    }
+    @media (max-width: 768px) {
+      .dual-field-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .field-readonly {
+      background: rgba(255, 255, 255, 0.03) !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: var(--text-muted) !important;
+      cursor: not-allowed;
+    }
+    .btn-auto-draft {
+      background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-auto-draft:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+    .btn-auto-draft:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="admin-shell">
+    
+    <!-- Backdrop Overlay for Mobile Drawer -->
+    <div class="admin-drawer-overlay" id="adminDrawerOverlay"></div>
+
+    <!-- 1. LEFT SIDEBAR -->
+    <aside class="admin-sidebar" id="adminSidebar">
+      <div class="admin-sidebar-header">
+        <a href="/admin" class="admin-sidebar-brand" title="Digimest Admin">
+          <img src="/logo/digimest.png" alt="Digimest" class="admin-sidebar-logo">
+          <span class="admin-brand-tag">ADMIN</span>
+        </a>
+      </div>
+
+      <div class="admin-sidebar-content">
+        <!-- Group 1: OVERVIEW -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Overview</div>
+          <a href="/admin" class="admin-sidebar-link">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Dashboard</span>
+          </a>
+        </div>
+
+        <!-- Group 2: KATALOG PRODUK -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Katalog Produk</div>
+          <a href="/admin/products" class="admin-sidebar-link">
+            <span class="nav-icon">📦</span>
+            <span class="nav-label">Produk DigitalCore</span>
+          </a>
+          <a href="/admin/silvex-products" class="admin-sidebar-link">
+            <span class="nav-icon">🤖</span>
+            <span class="nav-label">Produk Silvex AI</span>
+          </a>
+          <a href="/admin/custom-products" class="admin-sidebar-link">
+            <span class="nav-icon">✨</span>
+            <span class="nav-label">Produk Mandiri / Lokal</span>
+          </a>
+          <a href="/admin/reviews" class="admin-sidebar-link">
+            <span class="nav-icon">⭐</span>
+            <span class="nav-label">Ulasan & Etalase</span>
+          </a>
+          <a href="/admin/translations" class="admin-sidebar-link active">
+            <span class="nav-icon">🌐</span>
+            <span class="nav-label">Terjemahan (EN)</span>
+          </a>
+        </div>
+
+        <!-- Group 3: PENJUALAN & TRANSAKSI -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Penjualan & Promosi</div>
+          <a href="/admin/orders" class="admin-sidebar-link">
+            <span class="nav-icon">📜</span>
+            <span class="nav-label">Riwayat Pesanan</span>
+          </a>
+          <a href="/admin/vouchers" class="admin-sidebar-link">
+            <span class="nav-icon">🎟️</span>
+            <span class="nav-label">Kelola Voucher</span>
+          </a>
+        </div>
+
+        <!-- Group 4: SISTEM & PENGATURAN -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Sistem & Pengaturan</div>
+          <a href="/admin/settings" class="admin-sidebar-link">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">Pengaturan Toko</span>
+          </a>
+          <a href="/admin/security" class="admin-sidebar-link">
+            <span class="nav-icon">🛡️</span>
+            <span class="nav-label">Log Keamanan & Login</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div class="admin-sidebar-footer">
+        <div class="admin-session-box" id="adminLastLoginBadge" title="Informasi sesi login admin terakhir">
+          <span class="last-login-dot">●</span>
+          <div style="flex: 1; min-width: 0; line-height: 1.2;">
+            <div style="color: #cbd5e1; font-weight: 600; font-size: 0.72rem;">Sesi Admin Aktif</div>
+            <div id="topbarLastLoginLoc" style="color: var(--text-muted); font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Memuat...</div>
+          </div>
+          <a href="/admin/security" class="btn-login-history" title="Log Keamanan">🛡️</a>
+        </div>
+        <div class="admin-footer-actions">
+          <a href="/" target="_blank" class="btn-nav" style="flex: 1; text-align: center; font-size: 0.75rem; padding: 0.4rem 0.5rem;">Lihat Toko ↗</a>
+          <button id="btnLogoutSidebar" class="btn-nav btn-admin-logout" style="color: #f87171; font-size: 0.75rem; padding: 0.4rem 0.6rem;">Logout</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 2. MAIN VIEWPORT -->
+    <div class="admin-main-viewport">
+      
+      <!-- Topbar Header -->
+      <header class="admin-topbar">
+        <div class="admin-topbar-left">
+          <button class="admin-hamburger-btn" id="adminHamburgerBtn" aria-label="Buka Menu Navigasi">
+            ☰
+          </button>
+          <div class="admin-breadcrumb">
+            <span>Admin</span>
+            <span>›</span>
+            <span>Katalog</span>
+            <span>›</span>
+            <strong>Terjemahan (EN)</strong>
+          </div>
+        </div>
+
+        <div class="admin-topbar-right">
+          <div class="topbar-pill topbar-pill-hide-mobile" id="topbarDcStatus" title="Status DigitalCore">
+            <span>● DC:</span>
+            <strong id="statDcBalanceTop" style="color: #10b981;">$0.00</strong>
+          </div>
+          <div class="topbar-pill topbar-pill-hide-mobile" id="topbarSilvexStatus" title="Status Silvex AI">
+            <span>● Silvex:</span>
+            <strong id="statSilvexBalanceTop" style="color: #a855f7;">$0.00</strong>
+          </div>
+          <button id="btnRefreshStats" class="btn-nav" style="padding: 0.38rem 0.8rem; font-size: 0.78rem;">🔄 Refresh</button>
+          <a href="/" target="_blank" class="btn-nav topbar-pill-hide-mobile" style="padding: 0.38rem 0.8rem; font-size: 0.78rem;">Toko (ID) ↗</a>
+          <a href="/en/" target="_blank" class="btn-nav topbar-pill-hide-mobile" style="border-color: rgba(99, 102, 241, 0.4); color: #818cf8; padding: 0.38rem 0.8rem; font-size: 0.78rem;">Toko (EN) ↗</a>
+          <button id="btnLogout" class="btn-nav btn-admin-logout topbar-pill-hide-mobile" style="color: #f87171; padding: 0.38rem 0.75rem; font-size: 0.78rem;">Logout</button>
+        </div>
+      </header>
+
+      <!-- Main Page Content Body -->
+      <main class="admin-page-body">
+        
+        <!-- Segmented Control Bar -->
+        <div class="product-segment-tabs">
+          <a href="/admin/products" class="seg-btn">
+            <span>📦</span> DigitalCore
+          </a>
+          <a href="/admin/silvex-products" class="seg-btn">
+            <span>🤖</span> Silvex AI
+          </a>
+          <a href="/admin/custom-products" class="seg-btn">
+            <span>✨</span> Mandiri / Lokal
+          </a>
+          <a href="/admin/reviews" class="seg-btn">
+            <span>⭐</span> Ulasan & Etalase
+          </a>
+          <a href="/admin/translations" class="seg-btn active">
+            <span>🌐</span> Terjemahan (EN)
+          </a>
+        </div>
+
+        <!-- Header Row -->
+        <div class="admin-header-row">
+          <div class="admin-title-wrap">
+            <h1>🌐 Terjemahan Produk (Bahasa Inggris)</h1>
+            <p>Menu khusus untuk melengkapi teks Bahasa Inggris pada produk toko Anda. Produk yang belum diterjemahkan otomatis menggunakan teks Bahasa Indonesia sebagai cadangan (fallback) yang aman.</p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button id="btnRefreshTranslations" class="btn-nav" style="padding: 0.5rem 1rem;">🔄 Muat Ulang</button>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.5rem;">
+          <div class="stat-card" style="padding: 1rem;">
+            <div class="stat-label">Total Produk Toko</div>
+            <div class="stat-value" id="cntTotalProds" style="font-size: 1.4rem;">0</div>
+            <div class="stat-desc">Produk lokal & upstream</div>
+          </div>
+          <div class="stat-card" style="padding: 1rem;">
+            <div class="stat-label">Sudah di-set (EN)</div>
+            <div class="stat-value highlight-green" id="cntTranslatedProds" style="font-size: 1.4rem;">0</div>
+            <div class="stat-desc">Tampil teks Inggris di /en/</div>
+          </div>
+          <div class="stat-card" style="padding: 1rem;">
+            <div class="stat-label">Belum di-set</div>
+            <div class="stat-value highlight-gold" id="cntPendingProds" style="font-size: 1.4rem;">0</div>
+            <div class="stat-desc">Otomatis pakai teks Indo di web EN</div>
+          </div>
+        </div>
+
+        <!-- Filter & Search -->
+        <div class="section-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="flex: 1; min-width: 260px; max-width: 450px;">
+              <input type="text" id="searchTransInput" class="form-input" placeholder="🔍 Cari nama produk atau slug...">
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="transFilterGroup">
+              <button class="tag-btn active" data-tfilter="ALL">Semua Produk</button>
+              <button class="tag-btn" data-tfilter="TRANSLATED">Sudah di-set (EN)</button>
+              <button class="tag-btn" data-tfilter="PENDING">Belum di-set</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Translations Table Card -->
+        <div class="section-card" style="padding: 0; overflow: hidden;">
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">#</th>
+                  <th>Nama Produk (ID)</th>
+                  <th>Tipe / Kategori</th>
+                  <th>Status Terjemahan</th>
+                  <th>Nama Produk (EN)</th>
+                  <th style="text-align: right; width: 140px;">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="translationsTableBody">
+                <tr>
+                  <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                    Memuat data terjemahan produk...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+    <!-- 3. MOBILE BOTTOM NAVIGATION BAR -->
+    <nav class="admin-bottom-nav">
+      <a href="/admin" class="bottom-nav-item">
+        <span class="bottom-icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="/admin/products" class="bottom-nav-item active">
+        <span class="bottom-icon">📦</span>
+        <span>Produk</span>
+      </a>
+      <a href="/admin/orders" class="bottom-nav-item">
+        <span class="bottom-icon">📜</span>
+        <span>Pesanan</span>
+      </a>
+      <button type="button" class="bottom-nav-item" id="btnBottomNavMenu">
+        <span class="bottom-icon">☰</span>
+        <span>Menu</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- Edit Translation Modal -->
+  <div class="modal-overlay" id="editTransModal">
+    <div class="modal-card" style="max-width: 860px; width: 95%;">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+        <div>
+          <h2 style="font-size: 1.25rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;">
+            <span>🌐 Edit Terjemahan Bahasa Inggris (EN)</span>
+          </h2>
+          <div id="modalProductSlugBadge" style="font-size: 0.8rem; color: var(--text-muted); font-family: monospace; margin-top: 4px;">slug: -</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button type="button" id="btnAutoDraft" class="btn-auto-draft" title="Terjemahkan otomatis teks Indonesia ke Inggris menggunakan AI/Mesin Terjemah">
+            <span>✨ Auto-Draft EN</span>
+          </button>
+          <button type="button" class="btn-close" id="btnCloseEditTransModal" style="background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer;">✕</button>
+        </div>
+      </div>
+
+      <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 10px 14px; margin-bottom: 1.25rem; font-size: 0.82rem; color: #a5b4fc; line-height: 1.5;">
+        💡 <strong>Informasi:</strong> Modifikasi di form ini khusus menerjemahkan teks deskriptif ke bahasa Inggris. Seluruh data harga, diskon promo, stok, serial key, slug, dan gambar otomatis terhubung 100% dari data produk utama (Indo).
+      </div>
+
+      <form id="transForm">
+        <input type="hidden" id="transProductSlug">
+
+        <!-- Nama Produk -->
+        <div class="dual-field-grid">
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted);">🇮🇩 Nama Produk (Acuan Utama - Read Only)</label>
+            <input type="text" id="origNameID" class="form-input field-readonly" readonly tabindex="-1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: #a5b4fc; font-weight: 600;">🇬🇧 Nama Produk (EN - Input Terjemahan) *</label>
+            <input type="text" id="transNameEN" class="form-input" placeholder="Tulis nama produk bahasa Inggris..." required>
+          </div>
+        </div>
+
+        <!-- Tipe & Wilayah -->
+        <div class="dual-field-grid">
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted);">🇮🇩 Tipe / Kategori (Acuan Utama)</label>
+            <input type="text" id="origTypeID" class="form-input field-readonly" readonly tabindex="-1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: #a5b4fc; font-weight: 600;">🇬🇧 Tipe / Kategori (EN)</label>
+            <input type="text" id="transTypeEN" class="form-input" placeholder="e.g. Digital License / Subscription">
+          </div>
+        </div>
+
+        <div class="dual-field-grid">
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted);">🇮🇩 Wilayah / Region (Acuan Utama)</label>
+            <input type="text" id="origRegionID" class="form-input field-readonly" readonly tabindex="-1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: #a5b4fc; font-weight: 600;">🇬🇧 Wilayah / Region (EN)</label>
+            <input type="text" id="transRegionEN" class="form-input" placeholder="e.g. Global / Worldwide">
+          </div>
+        </div>
+
+        <!-- Garansi -->
+        <div class="dual-field-grid">
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted);">🇮🇩 Garansi (Acuan Utama)</label>
+            <input type="text" id="origWarrantyID" class="form-input field-readonly" readonly tabindex="-1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: #a5b4fc; font-weight: 600;">🇬🇧 Garansi (EN)</label>
+            <input type="text" id="transWarrantyEN" class="form-input" placeholder="e.g. 1 Month Full Replacement Warranty">
+          </div>
+        </div>
+
+        <!-- Deskripsi -->
+        <div class="dual-field-grid">
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted);">🇮🇩 Deskripsi Fitur (Acuan Utama)</label>
+            <textarea id="origDescID" class="form-textarea field-readonly" rows="5" readonly tabindex="-1" style="resize: vertical;"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: #a5b4fc; font-weight: 600;">🇬🇧 Deskripsi Fitur (EN)</label>
+            <textarea id="transDescEN" class="form-textarea" rows="5" placeholder="Features, benefits, and instructions in English..." style="resize: vertical;"></textarea>
+          </div>
+        </div>
+
+        <!-- Syarat & Ketentuan -->
+        <div class="dual-field-grid">
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted);">🇮🇩 Syarat & Ketentuan (Acuan Utama)</label>
+            <textarea id="origTermsID" class="form-textarea field-readonly" rows="3" readonly tabindex="-1" style="resize: vertical;"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size: 0.82rem; color: #a5b4fc; font-weight: 600;">🇬🇧 Syarat & Ketentuan (EN)</label>
+            <textarea id="transTermsEN" class="form-textarea" rows="3" placeholder="Terms of purchase in English..." style="resize: vertical;"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+          <button type="button" class="btn-nav" id="btnCancelTransModal">Batal</button>
+          <button type="submit" class="btn-buy" id="btnSaveTranslation">💾 Simpan Terjemahan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast-notice"></div>
+
+  <script src="/js/api-config.js?v=3.3"></script>
+  <script src="/js/admin.js?v=3.3"></script>
+</body>
+</html>

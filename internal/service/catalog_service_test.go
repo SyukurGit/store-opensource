@@ -8,6 +8,7 @@ import (
 	"storeku/internal/database"
 	"storeku/internal/models"
 	"storeku/internal/provider"
+	"storeku/internal/repository"
 )
 
 type mockProvider struct {
@@ -80,5 +81,55 @@ func TestCatalogService_SWR_InstantResponse(t *testing.T) {
 		t.Errorf("GetPublicProducts blocked! Elapsed: %v, expected < 100ms", elapsed)
 	} else {
 		t.Logf("SUCCESS: SWR served instantaneously in %v (expected < 100ms, avoided 800ms delay)", elapsed)
+	}
+}
+
+func TestCatalogService_PrewarmCache_NoDeadlock(t *testing.T) {
+	db, err := database.InitDB(":memory:")
+	if err != nil {
+		t.Fatalf("Failed to init memory db: %v", err)
+	}
+
+	// Insert test data into cached_products
+	insertQuery := `
+		INSERT INTO cached_products (slug, raw_id, name, type, logo, region, stock, stock_capped, warranty, description, price_usd, tiers_json)
+		VALUES 
+		('chatgpt-plus', '1', 'ChatGPT Plus', 'AI', '', 'Global', 10, 0, '30 Days', 'Test Desc', 20.0, '[]'),
+		('claude-pro', '2', 'Claude Pro', 'AI', '', 'Global', 5, 0, '30 Days', 'Test Desc', 20.0, '[]'),
+		('gemini-advanced', '3', 'Gemini Advanced', 'AI', '', 'Global', 15, 0, '30 Days', 'Test Desc', 19.99, '[]');
+	`
+	if _, err := db.Exec(insertQuery); err != nil {
+		t.Fatalf("Failed to insert cached_products: %v", err)
+	}
+
+	// Insert setting to ensure setting table is queried
+	_, _ = db.Exec(`INSERT INTO settings (key, value) VALUES ('usd_rate', '18000')`)
+
+	settingRepo := repository.NewSettingRepository(db)
+	pricing := NewPricingService(nil, settingRepo)
+	reg := provider.NewRegistry()
+
+	svc := NewCatalogService(reg, pricing, nil, settingRepo, db)
+
+	done := make(chan bool, 1)
+	go func() {
+		svc.PrewarmCache()
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// Succeeded without deadlock!
+		svc.cacheMu.RLock()
+		count := len(svc.cachedProds)
+		svc.cacheMu.RUnlock()
+
+		if count != 3 {
+			t.Errorf("Expected 3 products loaded into memory, got %d", count)
+		} else {
+			t.Logf("SUCCESS: PrewarmCache loaded %d products with SetMaxOpenConns(1) with ZERO deadlock!", count)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("DEADLOCK DETECTED! PrewarmCache blocked for > 2s on SQLite connection pool!")
 	}
 }

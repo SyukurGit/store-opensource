@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Riwayat Pesanan - Admin Digimest</title>
+  <link rel="icon" type="image/png" href="/logo/digimest_icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+
+  <div class="admin-shell">
+    
+    <!-- Backdrop Overlay for Mobile Drawer -->
+    <div class="admin-drawer-overlay" id="adminDrawerOverlay"></div>
+
+    <!-- 1. LEFT SIDEBAR -->
+    <aside class="admin-sidebar" id="adminSidebar">
+      <div class="admin-sidebar-header">
+        <a href="/admin" class="admin-sidebar-brand" title="Digimest Admin">
+          <img src="/logo/digimest.png" alt="Digimest" class="admin-sidebar-logo">
+          <span class="admin-brand-tag">ADMIN</span>
+        </a>
+      </div>
+
+      <div class="admin-sidebar-content">
+        <!-- Group 1: OVERVIEW -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Overview</div>
+          <a href="/admin" class="admin-sidebar-link">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Dashboard</span>
+          </a>
+        </div>
+
+        <!-- Group 2: KATALOG PRODUK -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Katalog Produk</div>
+          <a href="/admin/products" class="admin-sidebar-link">
+            <span class="nav-icon">📦</span>
+            <span class="nav-label">Produk DigitalCore</span>
+          </a>
+          <a href="/admin/silvex-products" class="admin-sidebar-link">
+            <span class="nav-icon">🤖</span>
+            <span class="nav-label">Produk Silvex AI</span>
+          </a>
+          <a href="/admin/custom-products" class="admin-sidebar-link">
+            <span class="nav-icon">✨</span>
+            <span class="nav-label">Produk Mandiri / Lokal</span>
+          </a>
+          <a href="/admin/reviews" class="admin-sidebar-link">
+            <span class="nav-icon">⭐</span>
+            <span class="nav-label">Ulasan & Etalase</span>
+          </a>
+          <a href="/admin/translations" class="admin-sidebar-link">
+            <span class="nav-icon">🌐</span>
+            <span class="nav-label">Terjemahan (EN)</span>
+          </a>
+        </div>
+
+        <!-- Group 3: PENJUALAN & TRANSAKSI -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Penjualan & Promosi</div>
+          <a href="/admin/orders" class="admin-sidebar-link active">
+            <span class="nav-icon">📜</span>
+            <span class="nav-label">Riwayat Pesanan</span>
+          </a>
+          <a href="/admin/vouchers" class="admin-sidebar-link">
+            <span class="nav-icon">🎟️</span>
+            <span class="nav-label">Kelola Voucher</span>
+          </a>
+        </div>
+
+        <!-- Group 4: SISTEM & PENGATURAN -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Sistem & Pengaturan</div>
+          <a href="/admin/settings" class="admin-sidebar-link">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">Pengaturan Toko</span>
+          </a>
+          <a href="/admin/security" class="admin-sidebar-link">
+            <span class="nav-icon">🛡️</span>
+            <span class="nav-label">Log Keamanan & Login</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div class="admin-sidebar-footer">
+        <div class="admin-session-box" id="adminLastLoginBadge" title="Informasi sesi login admin terakhir">
+          <span class="last-login-dot">●</span>
+          <div style="flex: 1; min-width: 0; line-height: 1.2;">
+            <div style="color: #cbd5e1; font-weight: 600; font-size: 0.72rem;">Sesi Admin Aktif</div>
+            <div id="topbarLastLoginLoc" style="color: var(--text-muted); font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Memuat...</div>
+          </div>
+          <a href="/admin/security" class="btn-login-history" title="Log Keamanan">🛡️</a>
+        </div>
+        <div class="admin-footer-actions">
+          <a href="/" target="_blank" class="btn-nav" style="flex: 1; text-align: center; font-size: 0.75rem; padding: 0.4rem 0.5rem;">Lihat Toko ↗</a>
+          <button id="btnLogoutSidebar" class="btn-nav btn-admin-logout" style="color: #f87171; font-size: 0.75rem; padding: 0.4rem 0.6rem;">Logout</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 2. MAIN VIEWPORT -->
+    <div class="admin-main-viewport">
+      
+      <!-- Topbar Header -->
+      <header class="admin-topbar">
+        <div class="admin-topbar-left">
+          <button class="admin-hamburger-btn" id="adminHamburgerBtn" aria-label="Buka Menu Navigasi">
+            ☰
+          </button>
+          <div class="admin-breadcrumb">
+            <span>Admin</span>
+            <span>›</span>
+            <span>Penjualan</span>
+            <span>›</span>
+            <strong>Riwayat Pesanan</strong>
+          </div>
+        </div>
+
+        <div class="admin-topbar-right">
+          <div class="topbar-pill topbar-pill-hide-mobile" id="topbarDcStatus" title="Status DigitalCore">
+            <span>● DC:</span>
+            <strong id="statDcBalanceTop" style="color: #10b981;">$0.00</strong>
+          </div>
+          <div class="topbar-pill topbar-pill-hide-mobile" id="topbarSilvexStatus" title="Status Silvex AI">
+            <span>● Silvex:</span>
+            <strong id="statSilvexBalanceTop" style="color: #a855f7;">$0.00</strong>
+          </div>
+          <button id="btnRefreshStats" class="btn-nav" style="padding: 0.38rem 0.8rem; font-size: 0.78rem;">🔄 Refresh</button>
+          <a href="/" target="_blank" class="btn-nav topbar-pill-hide-mobile" style="padding: 0.38rem 0.8rem; font-size: 0.78rem;">Toko ↗</a>
+          <button id="btnLogout" class="btn-nav btn-admin-logout topbar-pill-hide-mobile" style="color: #f87171; padding: 0.38rem 0.75rem; font-size: 0.78rem;">Logout</button>
+        </div>
+      </header>
+
+      <!-- Main Page Content Body -->
+      <main class="admin-page-body">
+
+        <!-- Header Row -->
+        <div class="admin-header-row">
+          <div class="admin-title-wrap">
+            <h1>📜 Semua Riwayat Transaksi</h1>
+            <p>Pantau pembayaran mutasi QRIS ShopeePay, data kontak pembeli, dan status pengiriman lisensi multi-provider & lokal.</p>
+          </div>
+          <div>
+            <span class="badge badge-stock" id="totalOrdersBadge">Memuat...</span>
+          </div>
+        </div>
+
+        <!-- Filter and Search Row -->
+        <div class="section-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="flex: 1; min-width: 260px; max-width: 450px;">
+              <input type="text" id="searchOrderInput" class="form-input" placeholder="🔍 Cari Invoice, Email, Kontak, atau Kode Klaim..." style="padding: 0.6rem 1rem;">
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button class="tag-btn active" data-order-filter="ALL">Semua</button>
+              <button class="tag-btn" data-order-filter="PAID">Lunas</button>
+              <button class="tag-btn" data-order-filter="HOLD">⚠️ Tertahan</button>
+              <button class="tag-btn" data-order-filter="PENDING">Menunggu</button>
+              <button class="tag-btn" data-order-filter="FAILED">Gagal Stok</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Orders Data Table -->
+        <div class="section-card" style="padding: 0; overflow: hidden;">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Invoice & Waktu</th>
+                  <th>Pembeli (Email & Kontak)</th>
+                  <th>Produk & Qty</th>
+                  <th>Total Bayar</th>
+                  <th>Kode Unik</th>
+                  <th>Status Bayar</th>
+                  <th>Fulfillment DC</th>
+                  <th>Kode Klaim</th>
+                  <th style="text-align: right;">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="ordersTableBody">
+                <tr>
+                  <td colspan="9" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+                    Memuat data pesanan...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+    <!-- 3. MOBILE BOTTOM NAVIGATION BAR -->
+    <nav class="admin-bottom-nav">
+      <a href="/admin" class="bottom-nav-item">
+        <span class="bottom-icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="/admin/products" class="bottom-nav-item">
+        <span class="bottom-icon">📦</span>
+        <span>Produk</span>
+      </a>
+      <a href="/admin/orders" class="bottom-nav-item active">
+        <span class="bottom-icon">📜</span>
+        <span>Pesanan</span>
+      </a>
+      <button type="button" class="bottom-nav-item" id="btnBottomNavMenu">
+        <span class="bottom-icon">☰</span>
+        <span>Menu</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- Modal Detail Order / Lisensi -->
+  <div class="modal-overlay" id="orderDetailModal">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Detail Lisensi Pesanan</h3>
+        <button class="modal-close" id="closeDetailModalBtn">&times;</button>
+      </div>
+      <div id="modalDetailContent"></div>
+    </div>
+  </div>
+
+  <!-- Modal Kirim Serial Key Manual -->
+  <div class="modal-overlay" id="manualDeliverModal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🔑 Kirim Lisensi / Key Manual</h3>
+        <button class="modal-close" id="closeManualDeliverModalBtn">&times;</button>
+      </div>
+      <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Kirim serial key langsung ke pembeli untuk pesanan: <strong id="mdInvoiceText" style="color: #60a5fa; font-family: var(--font-mono);">-</strong>
+      </div>
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label class="form-label" for="mdKeysInput">Masukkan Lisensi / Serial Key (1 per baris)</label>
+        <textarea id="mdKeysInput" class="form-input" rows="5" placeholder="KEY-XXXX-YYYY-1234&#10;user@mail.com:pass" style="font-family: var(--font-mono); font-size: 0.82rem;"></textarea>
+        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">Setelah dikirim, status pesanan otomatis berubah jadi LUNAS (SUCCESS) dan email notifikasi lisensi dikirimkan ke pembeli jika email tersedia.</div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-nav" id="cancelManualDeliverBtn">Batal</button>
+        <button type="button" class="btn-buy" id="btnSubmitManualDeliver">Kirim Lisensi Sekarang</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Riwayat Login Admin -->
+  <div class="modal-overlay" id="loginHistoryModal">
+    <div class="modal-card" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🔐 Riwayat Sesi Login Admin</h3>
+        <button class="modal-close" id="closeLoginModalBtn">&times;</button>
+      </div>
+      <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Catatan waktu (WIB), IP address, estimasi lokasi, dan perangkat yang digunakan saat login ke panel admin.
+      </div>
+      <div style="overflow-x: auto; max-height: 380px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+          <thead>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: var(--text-muted);">
+              <th style="padding: 8px;">Waktu (WIB)</th>
+              <th style="padding: 8px;">IP Address</th>
+              <th style="padding: 8px;">Lokasi</th>
+              <th style="padding: 8px;">Perangkat</th>
+              <th style="padding: 8px;">User</th>
+            </tr>
+          </thead>
+          <tbody id="loginHistoryTableBody">
+            <tr>
+              <td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">Memuat riwayat login...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end;">
+        <button class="btn-nav" id="closeLoginModalBtn2" style="background: var(--bg-surface); padding: 0.45rem 1.2rem; cursor: pointer; border-radius: 8px;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast-notice"></div>
+
+  <script src="/js/api-config.js?v=3.3"></script>
+  <script src="/js/admin.js?v=3.3"></script>
+</body>
+</html>

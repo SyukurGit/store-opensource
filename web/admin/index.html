@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Admin - Digimest</title>
+  <link rel="icon" type="image/png" href="/logo/digimest_icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+
+  <div class="admin-shell">
+    
+    <!-- Backdrop Overlay for Mobile Drawer -->
+    <div class="admin-drawer-overlay" id="adminDrawerOverlay"></div>
+
+    <!-- 1. LEFT SIDEBAR -->
+    <aside class="admin-sidebar" id="adminSidebar">
+      <div class="admin-sidebar-header">
+        <a href="/admin" class="admin-sidebar-brand" title="Digimest Admin">
+          <img src="/logo/digimest.png" alt="Digimest" class="admin-sidebar-logo">
+          <span class="admin-brand-tag">ADMIN</span>
+        </a>
+      </div>
+
+      <div class="admin-sidebar-content">
+        <!-- Group 1: OVERVIEW -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Overview</div>
+          <a href="/admin" class="admin-sidebar-link active">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Dashboard</span>
+          </a>
+        </div>
+
+        <!-- Group 2: KATALOG PRODUK -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Katalog Produk</div>
+          <a href="/admin/products" class="admin-sidebar-link">
+            <span class="nav-icon">📦</span>
+            <span class="nav-label">Produk DigitalCore</span>
+          </a>
+          <a href="/admin/silvex-products" class="admin-sidebar-link">
+            <span class="nav-icon">🤖</span>
+            <span class="nav-label">Produk Silvex AI</span>
+          </a>
+          <a href="/admin/custom-products" class="admin-sidebar-link">
+            <span class="nav-icon">✨</span>
+            <span class="nav-label">Produk Mandiri / Lokal</span>
+          </a>
+          <a href="/admin/reviews" class="admin-sidebar-link">
+            <span class="nav-icon">⭐</span>
+            <span class="nav-label">Ulasan & Etalase</span>
+          </a>
+          <a href="/admin/translations" class="admin-sidebar-link">
+            <span class="nav-icon">🌐</span>
+            <span class="nav-label">Terjemahan (EN)</span>
+          </a>
+        </div>
+
+        <!-- Group 3: PENJUALAN & TRANSAKSI -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Penjualan & Promosi</div>
+          <a href="/admin/orders" class="admin-sidebar-link">
+            <span class="nav-icon">📜</span>
+            <span class="nav-label">Riwayat Pesanan</span>
+          </a>
+          <a href="/admin/vouchers" class="admin-sidebar-link">
+            <span class="nav-icon">🎟️</span>
+            <span class="nav-label">Kelola Voucher</span>
+          </a>
+        </div>
+
+        <!-- Group 4: SISTEM & PENGATURAN -->
+        <div class="admin-nav-group">
+          <div class="admin-nav-group-title">Sistem & Pengaturan</div>
+          <a href="/admin/settings" class="admin-sidebar-link">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">Pengaturan Toko</span>
+          </a>
+          <a href="/admin/security" class="admin-sidebar-link">
+            <span class="nav-icon">🛡️</span>
+            <span class="nav-label">Log Keamanan & Login</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div class="admin-sidebar-footer">
+        <div class="admin-session-box" id="adminLastLoginBadge" title="Informasi sesi login admin terakhir">
+          <span class="last-login-dot">●</span>
+          <div style="flex: 1; min-width: 0; line-height: 1.2;">
+            <div style="color: #cbd5e1; font-weight: 600; font-size: 0.72rem;">Sesi Admin Aktif</div>
+            <div id="topbarLastLoginLoc" style="color: var(--text-muted); font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Memuat...</div>
+          </div>
+          <a href="/admin/security" class="btn-login-history" title="Log Keamanan">🛡️</a>
+        </div>
+        <div class="admin-footer-actions">
+          <a href="/" target="_blank" class="btn-nav" style="flex: 1; text-align: center; font-size: 0.75rem; padding: 0.4rem 0.5rem;">Lihat Toko ↗</a>
+          <button id="btnLogoutSidebar" class="btn-nav btn-admin-logout" style="color: #f87171; font-size: 0.75rem; padding: 0.4rem 0.6rem;">Logout</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 2. MAIN VIEWPORT -->
+    <div class="admin-main-viewport">
+      
+      <!-- Topbar Header -->
+      <header class="admin-topbar">
+        <div class="admin-topbar-left">
+          <button class="admin-hamburger-btn" id="adminHamburgerBtn" aria-label="Buka Menu Navigasi">
+            ☰
+          </button>
+          <div class="admin-breadcrumb">
+            <span>Admin</span>
+            <span>›</span>
+            <strong>Dashboard Monitoring</strong>
+          </div>
+        </div>
+
+        <div class="admin-topbar-right">
+          <div class="topbar-pill topbar-pill-hide-mobile" id="topbarDcStatus" title="Status DigitalCore">
+            <span>● DC:</span>
+            <strong id="statDcBalanceTop" style="color: #10b981;">$0.00</strong>
+          </div>
+          <div class="topbar-pill topbar-pill-hide-mobile" id="topbarSilvexStatus" title="Status Silvex AI">
+            <span>● Silvex:</span>
+            <strong id="statSilvexBalanceTop" style="color: #a855f7;">$0.00</strong>
+          </div>
+          <button id="btnRefreshStats" class="btn-nav" style="padding: 0.38rem 0.8rem; font-size: 0.78rem;">🔄 Refresh</button>
+          <a href="/" target="_blank" class="btn-nav topbar-pill-hide-mobile" style="padding: 0.38rem 0.8rem; font-size: 0.78rem;">Toko ↗</a>
+          <button id="btnLogout" class="btn-nav btn-admin-logout topbar-pill-hide-mobile" style="color: #f87171; padding: 0.38rem 0.75rem; font-size: 0.78rem;">Logout</button>
+        </div>
+      </header>
+
+      <!-- Main Page Body Content -->
+      <main class="admin-page-body">
+        
+        <!-- Header Row -->
+        <div class="admin-header-row">
+          <div class="admin-title-wrap">
+            <h1>Dashboard Monitoring Toko</h1>
+            <p>Pantau pembayaran QRIS, perputaran omzet, dan saldo stok DigitalCore serta Silvex AI secara real-time.</p>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <span class="badge badge-stock" id="apiStatusBadge">● Memeriksa Status...</span>
+            <button id="btnCheckDcTop" class="btn-nav" style="padding: 0.4rem 0.85rem; font-size: 0.8rem; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.4); color: #a5b4fc; cursor: pointer; border-radius: 8px; font-weight: 600;">
+              ⚡ Cek API DigitalCore
+            </button>
+            <button id="btnCheckSilvexTop" class="btn-nav" style="padding: 0.4rem 0.85rem; font-size: 0.8rem; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; cursor: pointer; border-radius: 8px; font-weight: 600;">
+              🤖 Cek API Silvex
+            </button>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">
+              <span>Total Omzet Toko</span>
+              <span>💰</span>
+            </div>
+            <div class="stat-value highlight-green" id="statRevenue">Rp 0</div>
+            <div class="stat-meta">Dari <strong id="statPaidCount" style="color:#fff;">0</strong> pesanan lunas</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">
+              <span>Saldo DigitalCore Bot</span>
+              <span>🤖</span>
+            </div>
+            <div class="stat-value highlight-gold" id="statDcBalance">$0.00</div>
+            <div class="stat-meta" style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+              <span>Order DC: <strong id="statDcOrders" style="color:#fff;">0</strong></span>
+              <button id="btnCheckDcCard" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; cursor: pointer; font-weight: 700;">
+                🔍 Cek API
+              </button>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">
+              <span>Saldo Silvex AI Bot</span>
+              <span>🤖</span>
+            </div>
+            <div class="stat-value highlight-gold" id="statSilvexBalance">$0.00</div>
+            <div class="stat-meta" style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+              <span>Status: <strong id="statSilvexStatus" style="color:#34d399;">Aktif</strong></span>
+              <button id="btnCheckSilvexCard" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; cursor: pointer; font-weight: 700;">
+                🔍 Cek API
+              </button>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">
+              <span>Hari Ini</span>
+              <span>📅</span>
+            </div>
+            <div class="stat-value" id="statTodayRevenue">Rp 0</div>
+            <div class="stat-meta"><strong id="statTodayOrders" style="color:#fff;">0</strong> pesanan dibuat hari ini</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">
+              <span>Status Transaksi</span>
+              <span>📊</span>
+            </div>
+            <div style="display: flex; gap: 16px; margin-top: 6px;">
+              <div>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">MENUNGGU</div>
+                <div style="font-size: 1.25rem; font-weight: 800; color: #fbbf24;" id="statPendingCount">0</div>
+              </div>
+              <div>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">GAGAL STOK</div>
+                <div style="font-size: 1.25rem; font-weight: 800; color: #f87171;" id="statFailedCount">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Navigation Shortcuts -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+          <a href="/admin/products" class="stat-card" style="text-decoration: none; border-color: rgba(99, 102, 241, 0.3); transition: transform 0.2s;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="font-size: 1.75rem;">📦</div>
+              <span style="font-size: 0.8rem; color: #818cf8; font-weight: 700;">Katalog DC ➔</span>
+            </div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-top: 4px;">Produk DigitalCore</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">Atur harga khusus, nama, deskripsi, terms, atau sembunyikan produk DC.</div>
+          </a>
+
+          <a href="/admin/silvex-products" class="stat-card" style="text-decoration: none; border-color: rgba(56, 189, 248, 0.3); transition: transform 0.2s;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="font-size: 1.75rem;">🤖</div>
+              <span style="font-size: 0.8rem; color: #38bdf8; font-weight: 700;">Katalog Silvex ➔</span>
+            </div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-top: 4px;">Produk Silvex AI</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">Kelola AI apps (ChatGPT, Claude, Canva, dll), atur logo ikon AI, harga jual & promo.</div>
+          </a>
+
+          <a href="/admin/orders" class="stat-card" style="text-decoration: none; border-color: rgba(16, 185, 129, 0.3); transition: transform 0.2s;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="font-size: 1.75rem;">📜</div>
+              <span style="font-size: 0.8rem; color: #34d399; font-weight: 700;">Semua Pesanan ➔</span>
+            </div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-top: 4px;">Riwayat Transaksi</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">Pantau status invoice, kode klaim pembeli, lisensi yang terkirim, dan retry fulfillment.</div>
+          </a>
+
+          <a href="/admin/settings" class="stat-card" style="text-decoration: none; border-color: rgba(245, 158, 11, 0.3); transition: transform 0.2s;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="font-size: 1.75rem;">⚙️</div>
+              <span style="font-size: 0.8rem; color: #fbbf24; font-weight: 700;">Atur Margin ➔</span>
+            </div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #fff; margin-top: 4px;">Kurs & Pengaturan Toko</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">Sesuaikan kurs USD-IDR, saklar provider API, dan keuntungan global toko.</div>
+          </a>
+        </div>
+
+        <!-- Recent Orders Section -->
+        <div class="section-card">
+          <div class="section-header">
+            <h2 class="section-title">⏱️ 5 Transaksi Terbaru</h2>
+            <a href="/admin/orders" class="tag-btn active" style="text-decoration: none;">Buka Semua Transaksi ➔</a>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Invoice & Waktu</th>
+                  <th>Produk & Qty</th>
+                  <th>Total Bayar</th>
+                  <th>Status Bayar</th>
+                  <th>Fulfillment DC</th>
+                  <th>Kode Klaim</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="ordersTableBody">
+                <tr>
+                  <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                    Memuat data pesanan terbaru...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+
+    </div>
+
+    <!-- 3. MOBILE BOTTOM NAVIGATION BAR -->
+    <nav class="admin-bottom-nav">
+      <a href="/admin" class="bottom-nav-item active">
+        <span class="bottom-icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="/admin/products" class="bottom-nav-item">
+        <span class="bottom-icon">📦</span>
+        <span>Produk</span>
+      </a>
+      <a href="/admin/orders" class="bottom-nav-item">
+        <span class="bottom-icon">📜</span>
+        <span>Pesanan</span>
+      </a>
+      <button type="button" class="bottom-nav-item" id="btnBottomNavMenu">
+        <span class="bottom-icon">☰</span>
+        <span>Menu</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- Modal Detail Order / Lisensi -->
+  <div class="modal-overlay" id="orderDetailModal">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Detail Lisensi Pesanan</h3>
+        <button class="modal-close" id="closeDetailModalBtn">&times;</button>
+      </div>
+      <div id="modalDetailContent"></div>
+    </div>
+  </div>
+
+  <!-- Modal Kirim Serial Key Manual -->
+  <div class="modal-overlay" id="manualDeliverModal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🔑 Kirim Lisensi / Key Manual</h3>
+        <button class="modal-close" id="closeManualDeliverModalBtn">&times;</button>
+      </div>
+      <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Kirim serial key langsung ke pembeli untuk pesanan: <strong id="mdInvoiceText" style="color: #60a5fa; font-family: var(--font-mono);">-</strong>
+      </div>
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label class="form-label" for="mdKeysInput">Masukkan Lisensi / Serial Key (1 per baris)</label>
+        <textarea id="mdKeysInput" class="form-input" rows="5" placeholder="KEY-XXXX-YYYY-1234&#10;user@mail.com:pass" style="font-family: var(--font-mono); font-size: 0.82rem;"></textarea>
+        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">Setelah dikirim, status pesanan otomatis berubah jadi LUNAS (SUCCESS) dan email notifikasi lisensi dikirimkan ke pembeli jika email tersedia.</div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-nav" id="cancelManualDeliverBtn">Batal</button>
+        <button type="button" class="btn-buy" id="btnSubmitManualDeliver">Kirim Lisensi Sekarang</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Hasil Cek DigitalCore -->
+  <div class="modal-overlay" id="dcCheckModal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="dcModalTitle">🔍 Hasil Cek Koneksi DigitalCore</h3>
+        <button class="modal-close" id="closeDcModalBtn">&times;</button>
+      </div>
+      <div id="dcModalBody" style="font-size: 0.88rem; color: #cbd5e1; line-height: 1.6;">
+        Memeriksa koneksi...
+      </div>
+      <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end;">
+        <button class="btn-nav" id="closeDcModalBtn2" style="background: var(--bg-surface); padding: 0.45rem 1.2rem; cursor: pointer; border-radius: 8px;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Riwayat Login Admin -->
+  <div class="modal-overlay" id="loginHistoryModal">
+    <div class="modal-card" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🔐 Riwayat Sesi Login Admin</h3>
+        <button class="modal-close" id="closeLoginModalBtn">&times;</button>
+      </div>
+      <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Catatan waktu (WIB), IP address, estimasi lokasi, dan perangkat yang digunakan saat login ke panel admin.
+      </div>
+      <div style="overflow-x: auto; max-height: 380px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+          <thead>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: var(--text-muted);">
+              <th style="padding: 8px;">Waktu (WIB)</th>
+              <th style="padding: 8px;">IP Address</th>
+              <th style="padding: 8px;">Lokasi</th>
+              <th style="padding: 8px;">Perangkat</th>
+              <th style="padding: 8px;">User</th>
+            </tr>
+          </thead>
+          <tbody id="loginHistoryTableBody">
+            <tr>
+              <td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">Memuat riwayat login...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end;">
+        <button class="btn-nav" id="closeLoginModalBtn2" style="background: var(--bg-surface); padding: 0.45rem 1.2rem; cursor: pointer; border-radius: 8px;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast-notice"></div>
+
+  <script src="/js/api-config.js?v=3.3"></script>
+  <script src="/js/admin.js?v=3.3"></script>
+</body>
+</html>

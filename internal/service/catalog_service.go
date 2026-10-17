@@ -462,39 +462,62 @@ func (s *CatalogService) loadFromPersistentDB() ([]*models.Product, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var products []*models.Product
+	// 1. Scan raw rows into in-memory slice first
+	type rawCachedItem struct {
+		slug, rawID, name, prodType, logo, region, warranty, desc, tiersJSON string
+		stock, stockCapped                                                  int
+		priceUSD                                                            float64
+	}
+	var rawList []rawCachedItem
+
 	for rows.Next() {
-		var slug, rawID, name, prodType, logo, region, warranty, desc, tiersJSON string
-		var stock, stockCapped int
-		var priceUSD float64
-		if err := rows.Scan(&slug, &rawID, &name, &prodType, &logo, &region, &stock, &stockCapped, &warranty, &desc, &priceUSD, &tiersJSON); err != nil {
+		var item rawCachedItem
+		if err := rows.Scan(&item.slug, &item.rawID, &item.name, &item.prodType, &item.logo, &item.region,
+			&item.stock, &item.stockCapped, &item.warranty, &item.desc, &item.priceUSD, &item.tiersJSON); err != nil {
 			continue
 		}
-		var tiers []models.ProductTier
-		_ = json.Unmarshal([]byte(tiersJSON), &tiers)
+		rawList = append(rawList, item)
+	}
+	// CRITICAL: Close rows cursor immediately to release SQLite connection back to pool!
+	_ = rows.Close()
 
-		baseUSD := priceUSD
+	if len(rawList) == 0 {
+		return nil, nil
+	}
+
+	// 2. Fetch pricing snapshot once (prevents 100+ individual DB setting queries)
+	var snap PricingSnapshot
+	if s.pricing != nil {
+		snap = s.pricing.GetSnapshot()
+	}
+
+	// 3. Transform products purely in-memory (0 database queries during loop)
+	var products []*models.Product
+	for _, item := range rawList {
+		var tiers []models.ProductTier
+		_ = json.Unmarshal([]byte(item.tiersJSON), &tiers)
+
+		baseUSD := item.priceUSD
 		if len(tiers) > 0 && tiers[0].PriceUSD > 0 {
 			baseUSD = tiers[0].PriceUSD
 		}
 		var sellIDR, modalIDR int64
 		if s.pricing != nil {
-			sellIDR = s.pricing.ConvertUSDToIDR(baseUSD)
-			modalIDR = int64(math.Round(baseUSD * s.pricing.GetUSDRate()))
+			sellIDR = s.pricing.ConvertUSDToIDRWithSnapshot(baseUSD, snap)
+			modalIDR = int64(math.Round(baseUSD * snap.Rate))
 		}
 		products = append(products, &models.Product{
-			RawID:             rawID,
-			Slug:              slug,
-			Name:              name,
-			Type:              prodType,
-			Logo:              logo,
-			Region:            region,
-			Stock:             stock,
-			StockCapped:       stockCapped == 1,
-			Warranty:          warranty,
-			Description:       desc,
+			RawID:             item.rawID,
+			Slug:              item.slug,
+			Name:              item.name,
+			Type:              item.prodType,
+			Logo:              item.logo,
+			Region:            item.region,
+			Stock:             item.stock,
+			StockCapped:       item.stockCapped == 1,
+			Warranty:          item.warranty,
+			Description:       item.desc,
 			Terms:             "Membeli berarti setuju",
 			PriceUSD:          baseUSD,
 			ModalIDR:          modalIDR,

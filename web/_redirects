@@ -1,0 +1,6 @@
+# ==============================================================
+# Cloudflare Pages: API Reverse Proxy ke VPS Backend
+# ==============================================================
+# Meneruskan seluruh request /api/* ke VPS backend secara transparan
+/api/*  https://digimest.syukurapi.online/api/:splat  200
+
