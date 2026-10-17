@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -222,254 +218,29 @@ func main() {
 		})
 	})
 
-	// 7. Clean URL Page Handlers & Static Serving (Optional: only if web/ directory exists)
-	workDir, _ := os.Getwd()
-	webDir := filepath.Join(workDir, "web")
-	hasWebDir := false
-	if fi, err := os.Stat(filepath.Join(webDir, "index.html")); err == nil && !fi.IsDir() {
-		hasWebDir = true
-	}
-
-	// Root Handler
+	// 7. Pure API Gateway Root & Status Endpoints
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		if !hasWebDir || strings.Contains(r.Header.Get("Accept"), "application/json") {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"success":true,"service":"digimest-backend","status":"online","version":"1.0.0"}`))
-			return
-		}
-
-		// 1. Respect explicit user language choice via cookie
-		cookie, err := r.Cookie("digimest_lang")
-		if err == nil {
-			if cookie.Value == "id" {
-				http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
-				return
-			}
-			if cookie.Value == "en" {
-				dest := "/en/"
-				if r.URL.RawQuery != "" {
-					dest += "?" + r.URL.RawQuery
-				}
-				http.Redirect(w, r, dest, http.StatusFound)
-				return
-			}
-		}
-
-		// 2. Detect client country from simulator or Cloudflare CDN headers
-		clientCountry := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("simulate_country")))
-		if clientCountry == "" {
-			clientCountry = strings.ToUpper(strings.TrimSpace(r.Header.Get("CF-IPCountry")))
-		}
-		if clientCountry == "" {
-			clientCountry = strings.ToUpper(strings.TrimSpace(r.Header.Get("X-Country-Code")))
-		}
-
-		// 3. If visitor is from Indonesia, serve index.html directly (0ms redirect)
-		if clientCountry == "ID" {
-			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
-			return
-		}
-
-		// 4. Default to English for international visitors
-		dest := "/en/"
-		if r.URL.RawQuery != "" {
-			dest += "?" + r.URL.RawQuery
-		}
-		http.Redirect(w, r, dest, http.StatusFound)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"success":true,"service":"digimest-backend","status":"online","version":"1.0.0"}`))
 	})
 
-	if hasWebDir {
-		// Static Assets (css, js, logo)
-		r.Handle("/css/*", http.StripPrefix("/css/", http.FileServer(http.Dir(filepath.Join(webDir, "css")))))
-		r.Handle("/js/*", http.StripPrefix("/js/", http.FileServer(http.Dir(filepath.Join(webDir, "js")))))
-		r.Handle("/logo/*", http.StripPrefix("/logo/", http.FileServer(http.Dir(filepath.Join(webDir, "logo")))))
-		r.Get("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "robots.txt"))
-		})
-		r.Get("/version.json", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
-			http.ServeFile(w, r, filepath.Join(webDir, "version.json"))
-		})
+	r.Get("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("User-agent: *\nDisallow: /api/\n"))
+	})
 
-		// 301 Permanent Redirects for legacy .html URLs
-		cleanRedirects := map[string]string{
-			"/index.html":          "/",
-			"/product.html":        "/product",
-			"/payment.html":        "/payment",
-			"/claim.html":          "/claim",
-			"/reviews.html":        "/reviews",
-			"/about.html":          "/about",
-			"/how-to-buy.html":     "/how-to-buy",
-			"/warranty.html":       "/warranty",
-			"/privacy.html":        "/privacy",
-			"/terms.html":          "/terms",
-			"/en/index.html":       "/en/",
-			"/en/product.html":     "/en/product",
-			"/en/payment.html":     "/en/payment",
-			"/en/about.html":       "/en/about",
-			"/en/how-to-buy.html":  "/en/how-to-buy",
-			"/en/warranty.html":    "/en/warranty",
-			"/en/privacy.html":     "/en/privacy",
-			"/en/terms.html":       "/en/terms",
-			"/en/claim.html":       "/en/claim",
-			"/admin/index.html":    "/admin",
-			"/admin/login.html":    "/admin/login",
-			"/admin/products.html":        "/admin/products",
-			"/admin/silvex-products.html": "/admin/silvex-products",
-			"/admin/custom-products.html": "/admin/custom-products",
-			"/admin/translations.html":    "/admin/translations",
-			"/admin/orders.html":          "/admin/orders",
-			"/admin/vouchers.html":        "/admin/vouchers",
-			"/admin/reviews.html":         "/admin/reviews",
-			"/admin/security.html":        "/admin/security",
-			"/admin/settings.html":        "/admin/settings",
-		}
-		for oldPath, newPath := range cleanRedirects {
-			target := newPath
-			r.Get(oldPath, func(w http.ResponseWriter, r *http.Request) {
-				dest := target
-				if r.URL.RawQuery != "" {
-					dest += "?" + r.URL.RawQuery
-				}
-				http.Redirect(w, r, dest, http.StatusMovedPermanently)
-			})
-		}
-
-		// Clean Public Page Handlers
-		r.Get("/product", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "product.html"))
-		})
-		r.Get("/payment", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "payment.html"))
-		})
-		r.Get("/claim", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "claim.html"))
-		})
-		r.Get("/reviews", func(w http.ResponseWriter, r *http.Request) {
-			slug := r.URL.Query().Get("slug")
-			if slug != "" {
-				http.Redirect(w, r, fmt.Sprintf("/product?slug=%s#customerReviewsSection", url.QueryEscape(slug)), http.StatusFound)
-				return
-			}
-			http.Redirect(w, r, "/", http.StatusFound)
-		})
-		r.Get("/about", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "about.html"))
-		})
-		r.Get("/how-to-buy", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "how-to-buy.html"))
-		})
-		r.Get("/warranty", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "warranty.html"))
-		})
-		r.Get("/privacy", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "privacy.html"))
-		})
-		r.Get("/terms", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "terms.html"))
-		})
-
-		// English Clean URL Pages
-		r.Get("/en", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/en/", http.StatusMovedPermanently)
-		})
-		r.Get("/en/", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "en", "index.html"))
-		})
-		r.Get("/en/product", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "en", "product.html"))
-		})
-		r.Get("/en/payment", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "en", "payment.html"))
-		})
-		r.Get("/en/about", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "en", "about.html"))
-		})
-		r.Get("/en/how-to-buy", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "en", "how-to-buy.html"))
-		})
-		r.Get("/en/warranty", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "en", "warranty.html"))
-		})
-		r.Get("/en/privacy", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "en", "privacy.html"))
-		})
-		r.Get("/en/terms", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "en", "terms.html"))
-		})
-		r.Get("/en/claim", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "en", "claim.html"))
-		})
-
-		// Clean Admin Page Handlers
-		r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "index.html"))
-		})
-		r.Get("/admin/", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/admin", http.StatusMovedPermanently)
-		})
-		r.Get("/admin/login", func(w http.ResponseWriter, r *http.Request) {
-			expectedToken := handler.GenerateAdminToken(cfg.AdminSecretKey)
-			cookie, err := r.Cookie("digimest_admin_session")
-			if err != nil {
-				cookie, err = r.Cookie("digihub_admin_session")
-			}
-			if err != nil {
-				cookie, err = r.Cookie("storeku_admin_session")
-			}
-			if err == nil && cookie.Value == expectedToken {
-				http.Redirect(w, r, "/admin", http.StatusFound)
-				return
-			}
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "login.html"))
-		})
-		r.Get("/admin/products", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "products.html"))
-		})
-		r.Get("/admin/silvex-products", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "silvex-products.html"))
-		})
-		r.Get("/admin/custom-products", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "custom-products.html"))
-		})
-		r.Get("/admin/translations", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "translations.html"))
-		})
-		r.Get("/admin/reviews", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "reviews.html"))
-		})
-		r.Get("/admin/orders", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "orders.html"))
-		})
-		r.Get("/admin/vouchers", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "vouchers.html"))
-		})
-		r.Get("/admin/security", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "security.html"))
-		})
-		r.Get("/admin/settings", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(webDir, "admin", "settings.html"))
-		})
-	} else {
-		// Pure API Gateway Mode (Production VPS)
-		r.Get("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte("User-agent: *\nDisallow: /api/\n"))
-		})
-		r.Get("/version.json", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"success":true,"service":"digimest-backend","status":"online","version":"1.0.0"}`))
-		})
-	}
+	r.Get("/version.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		w.Write([]byte(`{"success":true,"service":"digimest-backend","status":"online","version":"1.0.0"}`))
+	})
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("==================================================")
-	log.Printf(" Digimest is live on http://localhost:%s (Domain: Digimest.tech)", cfg.Port)
-	log.Printf(" 🛍️  Katalog & Toko : http://localhost:%s/", cfg.Port)
-	log.Printf(" 🔑  Klaim Lisensi  : http://localhost:%s/claim", cfg.Port)
-	log.Printf(" ⚙️  Panel Admin    : http://localhost:%s/admin", cfg.Port)
+	log.Printf(" Digimest API is live on http://localhost:%s", cfg.Port)
+	log.Printf(" 📡  Status API     : http://localhost:%s/", cfg.Port)
+	log.Printf(" 🩺  Health Check   : http://localhost:%s/health", cfg.Port)
 	log.Printf(" 📡  PaymentG URL   : %s", cfg.PaymentGAPIURL)
 	log.Printf(" 📦  DigitalCore URL: %s", cfg.DigitalCoreBaseURL)
 	log.Printf(" 📧  Resend Sender  : %s", cfg.ResendFromEmail)
