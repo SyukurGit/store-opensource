@@ -4,7 +4,7 @@ Panduan ini dirancang untuk **Developer** maupun **AI Coding Agent** agar memili
 
 ---
 
-## 🌐 Arsitektur 1-Layer (Cloudflare Tunnel)
+## 🌐 Arsitektur 1-Layer (Cloudflare Tunnels)
 
 Seluruh lalu lintas dari internet diamankan oleh Cloudflare dan diteruskan secara aman ke server melalui koneksi keluar (*outbound encrypted tunnel*) menggunakan daemon `cloudflared`.
 
