@@ -193,7 +193,7 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 			}
 		}
 
-		if targetProduct.IsCustomized && targetProduct.PriceIDR > 0 {
+		if (targetProduct.IsCustomized || targetProduct.HasPromo) && targetProduct.PriceIDR > 0 {
 			unitPriceIDR = targetProduct.PriceIDR
 		} else {
 			unitPriceIDR = s.pricing.ConvertUSDToIDR(unitPriceUSD)
