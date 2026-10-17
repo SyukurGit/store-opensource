@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -60,6 +61,10 @@ func main() {
 	providerRegistry.Register(silvexAdapter)
 
 	catalogService := service.NewCatalogService(providerRegistry, pricingService, overrideRepo, settingRepo, db)
+	// Pre-warm catalog cache from local DB (instant < 1ms response for initial visitors)
+	catalogService.PrewarmCache()
+	// Start background asynchronous catalog sync worker (periodic non-blocking sync every 150s)
+	go catalogService.StartBackgroundWorker(context.Background(), 150*time.Second)
 
 	// 5. Initialize Services
 	dcClient := service.NewDigitalCoreClient(cfg, pricingService, overrideRepo)

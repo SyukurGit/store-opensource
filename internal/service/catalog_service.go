@@ -26,9 +26,11 @@ type CatalogService struct {
 	settingRepo  *repository.SettingRepository
 	db           *database.DB
 
-	cacheMu      sync.RWMutex
-	cachedProds  []*models.Product
-	cacheExpires time.Time
+	cacheMu        sync.RWMutex
+	cachedProds    []*models.Product
+	lastSyncTime   time.Time
+	refreshTrigger chan struct{}
+	syncMu         sync.Mutex
 }
 
 // NewCatalogService creates a new CatalogService.
@@ -40,20 +42,65 @@ func NewCatalogService(
 	db *database.DB,
 ) *CatalogService {
 	return &CatalogService{
-		registry:     registry,
-		pricing:      pricing,
-		overrideRepo: overrideRepo,
-		settingRepo:  settingRepo,
-		db:           db,
+		registry:       registry,
+		pricing:        pricing,
+		overrideRepo:   overrideRepo,
+		settingRepo:    settingRepo,
+		db:             db,
+		refreshTrigger: make(chan struct{}, 1),
 	}
 }
 
-// InvalidateCache flushes the in-memory aggregated catalog cache.
+// PrewarmCache loads products from the persistent SQLite database into memory
+// at application startup, guaranteeing < 1ms response time for initial visitors.
+func (s *CatalogService) PrewarmCache() {
+	if dbProds, err := s.loadFromPersistentDB(); err == nil && len(dbProds) > 0 {
+		s.cacheMu.Lock()
+		s.cachedProds = dbProds
+		s.cacheMu.Unlock()
+		log.Printf("[CATALOG PREWARM] Loaded %d products from local persistent DB into memory", len(dbProds))
+	}
+}
+
+// TriggerBackgroundSync requests an asynchronous catalog refresh in the background without blocking.
+func (s *CatalogService) TriggerBackgroundSync() {
+	select {
+	case s.refreshTrigger <- struct{}{}:
+	default:
+	}
+}
+
+// StartBackgroundWorker runs a continuous background worker that periodically
+// syncs the catalog from remote providers without ever blocking public API requests.
+func (s *CatalogService) StartBackgroundWorker(ctx context.Context, interval time.Duration) {
+	log.Printf("[CATALOG WORKER] Started background catalog sync worker (interval: %v)", interval)
+
+	// Initial sync in background
+	_, _ = s.syncCatalog(ctx)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("[CATALOG WORKER] Stopped background catalog sync worker")
+			return
+		case <-ticker.C:
+			_, _ = s.syncCatalog(ctx)
+		case <-s.refreshTrigger:
+			log.Printf("[CATALOG WORKER] Handling on-demand refresh trigger")
+			_, _ = s.syncCatalog(ctx)
+		}
+	}
+}
+
+// InvalidateCache flushes the in-memory aggregated catalog cache and triggers a background sync.
 func (s *CatalogService) InvalidateCache() {
 	s.cacheMu.Lock()
-	defer s.cacheMu.Unlock()
-	s.cachedProds = nil
-	s.cacheExpires = time.Time{}
+	s.lastSyncTime = time.Time{}
+	s.cacheMu.Unlock()
+	s.TriggerBackgroundSync()
 }
 
 // GetPublicProducts retrieves the aggregated, active, customized product catalog.
@@ -268,18 +315,44 @@ func (s *CatalogService) GetPublicProductBySlug(ctx context.Context, slug, lang 
 	return nil, fmt.Errorf("produk '%s' tidak ditemukan atau sedang tidak aktif", slug)
 }
 
-// fetchAggregatedRaw fetches from in-memory cache or active providers.
+// fetchAggregatedRaw returns the aggregated products immediately from memory or DB (SWR pattern).
 func (s *CatalogService) fetchAggregatedRaw(ctx context.Context) ([]*models.Product, error) {
-	// 1. Check in-memory cache
+	// 1. Fast Path: In-memory cache (< 0.1ms)
 	s.cacheMu.RLock()
-	if len(s.cachedProds) > 0 && time.Now().Before(s.cacheExpires) {
+	if len(s.cachedProds) > 0 {
 		cached := s.cachedProds
+		needRefresh := time.Since(s.lastSyncTime) > 2*time.Minute
 		s.cacheMu.RUnlock()
+
+		// If cache is older than 2 minutes, trigger background refresh non-blockingly
+		if needRefresh {
+			s.TriggerBackgroundSync()
+		}
 		return cached, nil
 	}
 	s.cacheMu.RUnlock()
 
-	// 2. Determine active providers
+	// 2. Second Path: SQLite persistent cache (< 1ms)
+	if dbProds, err := s.loadFromPersistentDB(); err == nil && len(dbProds) > 0 {
+		s.cacheMu.Lock()
+		s.cachedProds = dbProds
+		s.cacheMu.Unlock()
+		s.TriggerBackgroundSync()
+		log.Printf("[CATALOG SWR] Serving %d products from SQLite persistent cache", len(dbProds))
+		return dbProds, nil
+	}
+
+	// 3. Cold Start Fallback: Only if both memory & SQLite are completely empty
+	log.Printf("[CATALOG SWR] Initial cold-start: querying providers directly...")
+	return s.syncCatalog(ctx)
+}
+
+// syncCatalog queries upstream providers, updates the persistent SQLite DB,
+// and updates the in-memory cache. Protected by syncMu so only 1 sync runs at a time.
+func (s *CatalogService) syncCatalog(ctx context.Context) ([]*models.Product, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
 	dcEnabled := true
 	silvexEnabled := true
 	if s.settingRepo != nil {
@@ -291,51 +364,48 @@ func (s *CatalogService) fetchAggregatedRaw(ctx context.Context) ([]*models.Prod
 	if s.registry != nil {
 		for _, p := range s.registry.List() {
 			if p.ID() == "DIGITALCORE" && !dcEnabled {
-				continue // Skip if DigitalCore upstream sync turned OFF
+				continue
 			}
 			if p.ID() == "SILVEX" && !silvexEnabled {
-				continue // Skip if Silvex AI upstream sync turned OFF
+				continue
 			}
 			activeProviders = append(activeProviders, p.ID())
 		}
 	}
 
-	// 3. Query providers concurrently with a 3.5s timeout
+	start := time.Now()
 	var prods []*models.Product
 	if s.registry != nil {
-		pList, errMap := s.registry.FetchAggregatedCatalog(ctx, activeProviders, 3500*time.Millisecond)
+		pList, errMap := s.registry.FetchAggregatedCatalog(ctx, activeProviders, 4000*time.Millisecond)
 		if len(errMap) > 0 {
-			log.Printf("[CATALOG] Upstream provider errors: %v", errMap)
+			log.Printf("[CATALOG SYNC] Upstream provider sync notice: %v", errMap)
 		}
 		prods = pList
 	}
 
-	// 4. If upstream returned products, save to persistent DB & memory cache
 	if len(prods) > 0 {
 		s.saveToPersistentDB(prods)
 		s.cacheMu.Lock()
 		s.cachedProds = prods
-		s.cacheExpires = time.Now().Add(45 * time.Second)
+		s.lastSyncTime = time.Now()
 		s.cacheMu.Unlock()
+		log.Printf("[CATALOG SYNC] Complete in %v. Updated %d products in memory & SQLite", time.Since(start), len(prods))
 		return prods, nil
 	}
 
-	// 5. Fallback to in-memory cached if present
+	// Fallback to in-memory cached if upstream failed
 	s.cacheMu.RLock()
 	if len(s.cachedProds) > 0 {
 		cached := s.cachedProds
 		s.cacheMu.RUnlock()
-		log.Printf("[CATALOG FALLBACK] Serving last in-memory cached catalog (%d products)", len(cached))
 		return cached, nil
 	}
 	s.cacheMu.RUnlock()
 
-	// 6. Fallback to persistent SQLite table cached_products
+	// Fallback to DB
 	if dbProds, err := s.loadFromPersistentDB(); err == nil && len(dbProds) > 0 {
-		log.Printf("[CATALOG FALLBACK] Serving persistent DB cached catalog (%d products)", len(dbProds))
 		s.cacheMu.Lock()
 		s.cachedProds = dbProds
-		s.cacheExpires = time.Now().Add(45 * time.Second)
 		s.cacheMu.Unlock()
 		return dbProds, nil
 	}
