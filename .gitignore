@@ -1,4 +1,5 @@
 .env
+/web/
 storeku-linux
 deploy/storeku-linux
 *.exe
