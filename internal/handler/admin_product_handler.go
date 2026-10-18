@@ -466,13 +466,20 @@ func (h *AdminHandler) ListEtalaseProducts(w http.ResponseWriter, r *http.Reques
 
 // SaveProductOverride handles POST /api/admin/products/{slug}
 func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
-	if slug == "" {
+	rawSlug := chi.URLParam(r, "slug")
+	if rawSlug == "" {
 		sendJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"error":   "Slug produk tidak boleh kosong",
 		})
 		return
+	}
+
+	slug := rawSlug
+	if unescaped, err := url.PathUnescape(rawSlug); err == nil && unescaped != "" {
+		slug = unescaped
+	} else if unescaped, err := url.QueryUnescape(rawSlug); err == nil && unescaped != "" {
+		slug = unescaped
 	}
 
 	var req models.ProductOverrideRequest
@@ -489,7 +496,7 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 	if h.dcClient != nil && !strings.HasPrefix(slug, "silvex_") && !strings.HasPrefix(slug, "local_") {
 		if rawProducts, err := h.dcClient.FetchRawProducts(); err == nil {
 			for _, p := range rawProducts {
-				if p.Slug == slug {
+				if p.Slug == slug || strings.EqualFold(p.Slug, slug) || strings.EqualFold(p.Slug, rawSlug) {
 					rawProd = p
 					break
 				}
@@ -500,7 +507,7 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 		if silvexProv, ok := h.providerRegistry.Get("SILVEX"); ok {
 			if prods, err := silvexProv.FetchCatalog(r.Context()); err == nil {
 				for _, p := range prods {
-					if p.Slug == slug {
+					if p.Slug == slug || strings.EqualFold(p.Slug, slug) || strings.EqualFold(p.Slug, rawSlug) {
 						rawProd = p
 						break
 					}
@@ -511,10 +518,15 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 	if rawProd == nil && h.localProductRepo != nil && strings.HasPrefix(slug, "local_") {
 		if lp, err := h.localProductRepo.GetBySlug(slug); err == nil && lp != nil {
 			rawProd = lp.ToProduct()
+		} else if lp, err := h.localProductRepo.GetBySlug(rawSlug); err == nil && lp != nil {
+			rawProd = lp.ToProduct()
 		}
 	}
 	if rawProd == nil && h.catalogService != nil {
 		rawProd, _ = h.catalogService.GetPublicProductBySlug(r.Context(), slug, "id")
+		if rawProd == nil {
+			rawProd, _ = h.catalogService.GetPublicProductBySlug(r.Context(), rawSlug, "id")
+		}
 	}
 
 	if rawProd == nil {
