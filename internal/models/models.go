@@ -159,11 +159,12 @@ func (lp *LocalProduct) ToProduct() *Product {
 		salesCount = 10
 	}
 
+	// ponytail: stockCapped indicates whether stock count is capped (>1000/unlimited) or shows exact count
 	stock := lp.Stock
-	stockCapped := true
+	stockCapped := false
 	if lp.IsUnlimitedStock {
 		stock = 9999
-		stockCapped = false
+		stockCapped = true
 	}
 	if lp.IsForceOutOfStock {
 		stock = 0

@@ -310,8 +310,8 @@ func TestLocalProduct_StockAndUnlimitedModel(t *testing.T) {
 	if prodUnlim.Stock != 9999 {
 		t.Errorf("Expected unlimited product stock 9999, got %d", prodUnlim.Stock)
 	}
-	if prodUnlim.StockCapped {
-		t.Errorf("Expected StockCapped=false for unlimited, got true")
+	if !prodUnlim.StockCapped {
+		t.Errorf("Expected StockCapped=true for unlimited, got false")
 	}
 
 	// 2. Custom manual stock local product
@@ -327,8 +327,8 @@ func TestLocalProduct_StockAndUnlimitedModel(t *testing.T) {
 	if prodManual.Stock != 15 {
 		t.Errorf("Expected manual stock 15, got %d", prodManual.Stock)
 	}
-	if !prodManual.StockCapped {
-		t.Errorf("Expected StockCapped=true for manual stock, got false")
+	if prodManual.StockCapped {
+		t.Errorf("Expected StockCapped=false for manual stock, got true")
 	}
 
 	// 3. Force out of stock overrides unlimited
