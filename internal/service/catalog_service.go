@@ -273,7 +273,7 @@ func (s *CatalogService) GetPublicProducts(ctx context.Context, lang string) ([]
 			p.PromoPriceIDR = 0
 			p.HasPromo = false
 			p.DiscountPercent = 0
-			p.DisplayOrder = 0
+			// ponytail: retain raw.DisplayOrder if already set by local product or upstream
 		}
 		p.IsActive = true
 
@@ -299,11 +299,20 @@ func (s *CatalogService) GetPublicProducts(ctx context.Context, lang string) ([]
 		publicProducts = append(publicProducts, &p)
 	}
 
-	// Sort: DisplayOrder ASC, SalesCount DESC, Name ASC
+	// Sort: positive DisplayOrder (> 0) ascending first (1, 2, 3...), followed by default (0),
+	// then SalesCount DESC, then Name ASC
 	sort.SliceStable(publicProducts, func(i, j int) bool {
-		if publicProducts[i].DisplayOrder != publicProducts[j].DisplayOrder {
-			return publicProducts[i].DisplayOrder < publicProducts[j].DisplayOrder
+		aOrder, bOrder := publicProducts[i].DisplayOrder, publicProducts[j].DisplayOrder
+		if aOrder > 0 && bOrder > 0 {
+			if aOrder != bOrder {
+				return aOrder < bOrder
+			}
+		} else if aOrder > 0 && bOrder == 0 {
+			return true
+		} else if aOrder == 0 && bOrder > 0 {
+			return false
 		}
+
 		if publicProducts[i].SalesCount != publicProducts[j].SalesCount {
 			return publicProducts[i].SalesCount > publicProducts[j].SalesCount
 		}

@@ -749,9 +749,11 @@ func (h *AdminHandler) UpdateProductDisplayStats(w http.ResponseWriter, r *http.
 		if h.dcClient != nil {
 			h.dcClient.InvalidateCache()
 		}
-		if h.catalogService != nil {
-			h.catalogService.InvalidateCache()
-		}
+	}
+
+	// Always invalidate catalog cache so order changes reflect immediately
+	if h.catalogService != nil {
+		h.catalogService.InvalidateCache()
 	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{

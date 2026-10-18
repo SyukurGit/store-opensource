@@ -173,6 +173,10 @@ func (s *OrderService) CreateCheckout(req *models.CheckoutRequest) (*models.Chec
 		return nil, fmt.Errorf("stok produk '%s' sedang habis (dinonaktifkan sementara oleh toko)", targetProduct.Name)
 	}
 
+	if targetProduct.Source == "LOCAL" && targetProduct.Stock <= 0 {
+		return nil, fmt.Errorf("stok produk '%s' saat ini sedang habis", targetProduct.Name)
+	}
+
 	if targetProduct.Stock > 0 && targetProduct.Stock < req.Quantity {
 		return nil, fmt.Errorf("stok tidak mencukupi (sisa: %d)", targetProduct.Stock)
 	}

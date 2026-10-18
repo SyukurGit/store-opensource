@@ -129,6 +129,7 @@ type LocalProduct struct {
 	HasPromo          bool      `json:"has_promo"`
 	DiscountPercent   int       `json:"discount_percent"`
 	Stock             int       `json:"stock"`
+	IsUnlimitedStock  bool      `json:"is_unlimited_stock"`
 	StockKeys         []string  `json:"stock_keys"` // In memory slice; stored as JSON text in DB
 	DisplayOrder      int       `json:"display_order"`
 	SalesCount        int       `json:"sales_count"`
@@ -158,6 +159,16 @@ func (lp *LocalProduct) ToProduct() *Product {
 		salesCount = 10
 	}
 
+	stock := lp.Stock
+	stockCapped := true
+	if lp.IsUnlimitedStock {
+		stock = 9999
+		stockCapped = false
+	}
+	if lp.IsForceOutOfStock {
+		stock = 0
+	}
+
 	return &Product{
 		Slug:              lp.Slug,
 		Name:              lp.Name,
@@ -174,7 +185,8 @@ func (lp *LocalProduct) ToProduct() *Product {
 		PromoPriceIDR:     lp.PromoPriceIDR,
 		HasPromo:          lp.HasPromo,
 		DiscountPercent:   discPct,
-		Stock:             lp.Stock,
+		Stock:             stock,
+		StockCapped:       stockCapped,
 		IsActive:          lp.IsActive,
 		IsForceOutOfStock: lp.IsForceOutOfStock,
 		IsCustomized:      true,
@@ -204,6 +216,8 @@ type LocalProductRequest struct {
 	ReferencePriceIDR int64    `json:"reference_price_idr"`
 	PromoPriceIDR     int64    `json:"promo_price_idr"`
 	HasPromo          bool     `json:"has_promo"`
+	Stock             *int     `json:"stock"`
+	IsUnlimitedStock  bool     `json:"is_unlimited_stock"`
 	StockKeys         []string `json:"stock_keys"` // Up to 10 keys
 	DisplayOrder      int      `json:"display_order"`
 	SalesCount        int      `json:"sales_count"`

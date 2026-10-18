@@ -215,3 +215,134 @@ func TestCatalogService_PromoPricingUSD_ReflectsPromoDiscount(t *testing.T) {
 	t.Logf("SUCCESS: Promo Product in USD mode verified: Promo PriceUSD=$%.2f (was NOT reverted to base modal cost $%.2f), RefPriceUSD=$%.2f",
 		p.PriceUSD, p.BasePriceUSD, p.ReferencePriceUSD)
 }
+
+func TestCatalogService_DisplayOrderPriorityOneOnTop(t *testing.T) {
+	db, err := database.InitDB(":memory:")
+	if err != nil {
+		t.Fatalf("Failed to init memory db: %v", err)
+	}
+	defer db.Close()
+
+	// Insert 4 cached products with different display orders & sales
+	cachedQuery := `
+		INSERT INTO cached_products (slug, raw_id, name, type, logo, region, stock, stock_capped, warranty, description, price_usd, tiers_json)
+		VALUES
+		('prod-a', '1', 'Apple Account', 'AI', '', 'Global', 10, 0, '1 Bulan', 'Desc', 5.0, '[]'),
+		('prod-b', '2', 'Zebra License', 'AI', '', 'Global', 10, 0, '1 Bulan', 'Desc', 5.0, '[]'),
+		('prod-c', '3', 'Banana Tool', 'AI', '', 'Global', 10, 0, '1 Bulan', 'Desc', 5.0, '[]'),
+		('prod-d', '4', 'Zeta Account', 'AI', '', 'Global', 10, 0, '1 Bulan', 'Desc', 5.0, '[]');
+	`
+	if _, err := db.Exec(cachedQuery); err != nil {
+		t.Fatalf("Failed to insert cached_products: %v", err)
+	}
+
+	// Overrides:
+	// prod-b: DisplayOrder = 1, SalesCount = 10
+	// prod-c: DisplayOrder = 2, SalesCount = 50
+	// prod-a: DisplayOrder = 0, SalesCount = 100
+	// prod-d: DisplayOrder = 0, SalesCount = 200
+	overrideQuery := `
+		INSERT INTO product_overrides (product_slug, is_active, display_order, sales_count)
+		VALUES
+		('prod-b', 1, 1, 10),
+		('prod-c', 1, 2, 50),
+		('prod-a', 1, 0, 100),
+		('prod-d', 1, 0, 200);
+	`
+	if _, err := db.Exec(overrideQuery); err != nil {
+		t.Fatalf("Failed to insert overrides: %v", err)
+	}
+
+	settingRepo := repository.NewSettingRepository(db)
+	overrideRepo := repository.NewProductOverrideRepository(db)
+	pricing := NewPricingService(nil, settingRepo)
+	reg := provider.NewRegistry()
+
+	svc := NewCatalogService(reg, pricing, overrideRepo, settingRepo, db)
+
+	ctx := context.Background()
+	products, err := svc.GetPublicProducts(ctx, "id")
+	if err != nil {
+		t.Fatalf("GetPublicProducts failed: %v", err)
+	}
+
+	if len(products) != 4 {
+		t.Fatalf("Expected 4 products, got %d", len(products))
+	}
+
+	// Check 1: prod-b (Priority 1) MUST be first at index 0
+	if products[0].Slug != "prod-b" {
+		t.Fatalf("PRIORITY 1 INVERSION BUG: Expected 'prod-b' at top (index 0), got '%s' (DisplayOrder=%d)",
+			products[0].Slug, products[0].DisplayOrder)
+	}
+
+	// Check 2: prod-c (Priority 2) MUST be second at index 1
+	if products[1].Slug != "prod-c" {
+		t.Fatalf("PRIORITY 2 MISPLACED: Expected 'prod-c' at index 1, got '%s'", products[1].Slug)
+	}
+
+	// Check 3: Default items (DisplayOrder=0) sort by SalesCount DESC -> prod-d (sales 200) then prod-a (sales 100)
+	if products[2].Slug != "prod-d" {
+		t.Fatalf("Expected 'prod-d' at index 2 (Sales 200), got '%s'", products[2].Slug)
+	}
+	if products[3].Slug != "prod-a" {
+		t.Fatalf("Expected 'prod-a' at index 3 (Sales 100), got '%s'", products[3].Slug)
+	}
+
+	t.Logf("SUCCESS: Etalase order verified: 1st=%s (order %d), 2nd=%s (order %d), 3rd=%s (sales %d), 4th=%s (sales %d)",
+		products[0].Slug, products[0].DisplayOrder,
+		products[1].Slug, products[1].DisplayOrder,
+		products[2].Slug, products[2].SalesCount,
+		products[3].Slug, products[3].SalesCount)
+}
+
+func TestLocalProduct_StockAndUnlimitedModel(t *testing.T) {
+	// 1. Unlimited local product
+	lpUnlim := &models.LocalProduct{
+		Slug:             "unlimited-item",
+		Name:             "Unlimited Item",
+		PriceIDR:         25000,
+		Stock:            0,
+		IsUnlimitedStock: true,
+		IsActive:         true,
+	}
+	prodUnlim := lpUnlim.ToProduct()
+	if prodUnlim.Stock != 9999 {
+		t.Errorf("Expected unlimited product stock 9999, got %d", prodUnlim.Stock)
+	}
+	if prodUnlim.StockCapped {
+		t.Errorf("Expected StockCapped=false for unlimited, got true")
+	}
+
+	// 2. Custom manual stock local product
+	lpManual := &models.LocalProduct{
+		Slug:             "manual-stock-item",
+		Name:             "Manual Stock Item",
+		PriceIDR:         35000,
+		Stock:            15,
+		IsUnlimitedStock: false,
+		IsActive:         true,
+	}
+	prodManual := lpManual.ToProduct()
+	if prodManual.Stock != 15 {
+		t.Errorf("Expected manual stock 15, got %d", prodManual.Stock)
+	}
+	if !prodManual.StockCapped {
+		t.Errorf("Expected StockCapped=true for manual stock, got false")
+	}
+
+	// 3. Force out of stock overrides unlimited
+	lpForceOut := &models.LocalProduct{
+		Slug:              "force-out-item",
+		Name:              "Force Out Item",
+		PriceIDR:          35000,
+		Stock:             15,
+		IsUnlimitedStock:  true,
+		IsForceOutOfStock: true,
+		IsActive:          true,
+	}
+	prodForceOut := lpForceOut.ToProduct()
+	if prodForceOut.Stock != 0 {
+		t.Errorf("Expected stock 0 when force out of stock, got %d", prodForceOut.Stock)
+	}
+}

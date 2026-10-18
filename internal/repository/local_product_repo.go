@@ -90,11 +90,21 @@ func (r *LocalProductRepository) Create(req *models.LocalProductRequest) (*model
 	cleanKeys := sanitizeKeys(req.StockKeys)
 	keysBytes, _ := json.Marshal(cleanKeys)
 
-	// Stock logic: if keys provided, stock = len(keys).
-	// If 0 keys provided, stock is 99 (ready for manual admin delivery) unless force out of stock
-	stock := len(cleanKeys)
-	if len(cleanKeys) == 0 && !req.IsForceOutOfStock {
-		stock = 99
+	// Stock logic:
+	// If unlimited, stock is 9999.
+	// If keys provided, stock = len(keys).
+	// If 0 keys provided, use req.Stock if specified, else default to 10.
+	stock := 10
+	if req.Stock != nil {
+		stock = *req.Stock
+		if stock < 0 {
+			stock = 0
+		}
+	}
+	if req.IsUnlimitedStock {
+		stock = 9999
+	} else if len(cleanKeys) > 0 {
+		stock = len(cleanKeys)
 	}
 
 	discPercent := 0
@@ -127,6 +137,11 @@ func (r *LocalProductRepository) Create(req *models.LocalProductRequest) (*model
 		isActiveInt = 1
 	}
 
+	isUnlimitedInt := 0
+	if req.IsUnlimitedStock {
+		isUnlimitedInt = 1
+	}
+
 	isForceOutInt := 0
 	if req.IsForceOutOfStock {
 		isForceOutInt = 1
@@ -147,14 +162,14 @@ func (r *LocalProductRepository) Create(req *models.LocalProductRequest) (*model
 		INSERT INTO local_products (
 			slug, name, type, logo, region, warranty, description, terms,
 			price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-			stock, stock_keys, display_order, sales_count, is_active, is_force_out_of_stock, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			stock, is_unlimited_stock, stock_keys, display_order, sales_count, is_active, is_force_out_of_stock, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`
 
 	res, err := r.db.Exec(query,
 		slug, req.Name, prodType, strings.TrimSpace(req.Logo), region, warranty,
 		req.Description, terms, req.PriceIDR, refPrice, req.PromoPriceIDR,
-		hasPromoInt, discPercent, stock, string(keysBytes), req.DisplayOrder, salesCount, isActiveInt, isForceOutInt,
+		hasPromoInt, discPercent, stock, isUnlimitedInt, string(keysBytes), req.DisplayOrder, salesCount, isActiveInt, isForceOutInt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("gagal menambahkan produk lokal: %w", err)
@@ -193,9 +208,24 @@ func (r *LocalProductRepository) Update(id int64, req *models.LocalProductReques
 	cleanKeys := sanitizeKeys(req.StockKeys)
 	keysBytes, _ := json.Marshal(cleanKeys)
 
-	stock := len(cleanKeys)
-	if len(cleanKeys) == 0 && !req.IsForceOutOfStock {
-		stock = 99
+	// Stock logic:
+	// If unlimited, stock is 9999.
+	// If keys provided, stock = len(cleanKeys).
+	// If 0 keys provided, use req.Stock if provided; otherwise retain existing stock in DB.
+	stock := 0
+	if req.IsUnlimitedStock {
+		stock = 9999
+	} else if len(cleanKeys) > 0 {
+		stock = len(cleanKeys)
+	} else if req.Stock != nil {
+		stock = *req.Stock
+		if stock < 0 {
+			stock = 0
+		}
+	} else {
+		var oldStock int
+		_ = r.db.QueryRow("SELECT stock FROM local_products WHERE id = ?", id).Scan(&oldStock)
+		stock = oldStock
 	}
 
 	discPercent := 0
@@ -228,6 +258,11 @@ func (r *LocalProductRepository) Update(id int64, req *models.LocalProductReques
 		isActiveInt = 1
 	}
 
+	isUnlimitedInt := 0
+	if req.IsUnlimitedStock {
+		isUnlimitedInt = 1
+	}
+
 	isForceOutInt := 0
 	if req.IsForceOutOfStock {
 		isForceOutInt = 1
@@ -248,14 +283,14 @@ func (r *LocalProductRepository) Update(id int64, req *models.LocalProductReques
 		UPDATE local_products SET
 			slug = ?, name = ?, type = ?, logo = ?, region = ?, warranty = ?, description = ?, terms = ?,
 			price_idr = ?, reference_price_idr = ?, promo_price_idr = ?, has_promo = ?, discount_percent = ?,
-			stock = ?, stock_keys = ?, display_order = ?, sales_count = ?, is_active = ?, is_force_out_of_stock = ?, updated_at = CURRENT_TIMESTAMP
+			stock = ?, is_unlimited_stock = ?, stock_keys = ?, display_order = ?, sales_count = ?, is_active = ?, is_force_out_of_stock = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`
 
 	_, err = r.db.Exec(query,
 		slug, req.Name, prodType, strings.TrimSpace(req.Logo), region, warranty,
 		req.Description, terms, req.PriceIDR, refPrice, req.PromoPriceIDR,
-		hasPromoInt, discPercent, stock, string(keysBytes), req.DisplayOrder, salesCount, isActiveInt, isForceOutInt,
+		hasPromoInt, discPercent, stock, isUnlimitedInt, string(keysBytes), req.DisplayOrder, salesCount, isActiveInt, isForceOutInt,
 		id,
 	)
 	if err != nil {
@@ -271,7 +306,7 @@ func (r *LocalProductRepository) GetByID(id int64) (*models.LocalProduct, error)
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
 		       COALESCE(name_en, ''), COALESCE(type_en, ''), COALESCE(region_en, ''), COALESCE(warranty_en, ''), COALESCE(description_en, ''), COALESCE(terms_en, ''),
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       stock, COALESCE(is_unlimited_stock, 0), stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, created_at, updated_at
 		FROM local_products
 		WHERE id = ?
@@ -286,7 +321,7 @@ func (r *LocalProductRepository) GetBySlug(slug string) (*models.LocalProduct, e
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
 		       COALESCE(name_en, ''), COALESCE(type_en, ''), COALESCE(region_en, ''), COALESCE(warranty_en, ''), COALESCE(description_en, ''), COALESCE(terms_en, ''),
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       stock, COALESCE(is_unlimited_stock, 0), stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, created_at, updated_at
 		FROM local_products
 		WHERE slug = ?
@@ -301,7 +336,7 @@ func (r *LocalProductRepository) GetAll() ([]*models.LocalProduct, error) {
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
 		       COALESCE(name_en, ''), COALESCE(type_en, ''), COALESCE(region_en, ''), COALESCE(warranty_en, ''), COALESCE(description_en, ''), COALESCE(terms_en, ''),
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       stock, COALESCE(is_unlimited_stock, 0), stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, created_at, updated_at
 		FROM local_products
 		ORDER BY id DESC
@@ -329,7 +364,7 @@ func (r *LocalProductRepository) GetAllActive() ([]*models.LocalProduct, error) 
 		SELECT id, slug, name, type, logo, region, warranty, description, terms,
 		       COALESCE(name_en, ''), COALESCE(type_en, ''), COALESCE(region_en, ''), COALESCE(warranty_en, ''), COALESCE(description_en, ''), COALESCE(terms_en, ''),
 		       price_idr, reference_price_idr, promo_price_idr, has_promo, discount_percent,
-		       stock, stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
+		       stock, COALESCE(is_unlimited_stock, 0), stock_keys, COALESCE(display_order, 0), COALESCE(sales_count, 10),
 		       is_active, is_force_out_of_stock, created_at, updated_at
 		FROM local_products
 		WHERE is_active = 1
@@ -390,7 +425,8 @@ func (r *LocalProductRepository) ClaimKeys(slug string, qty int) ([]string, erro
 
 	var keysJSON string
 	var currentStock int
-	err := r.db.QueryRow("SELECT stock_keys, stock FROM local_products WHERE slug = ?", slug).Scan(&keysJSON, &currentStock)
+	var isUnlimited int
+	err := r.db.QueryRow("SELECT stock_keys, stock, COALESCE(is_unlimited_stock, 0) FROM local_products WHERE slug = ?", slug).Scan(&keysJSON, &currentStock, &isUnlimited)
 	if err != nil {
 		return nil, fmt.Errorf("produk lokal '%s' tidak ditemukan: %w", slug, err)
 	}
@@ -399,7 +435,14 @@ func (r *LocalProductRepository) ClaimKeys(slug string, qty int) ([]string, erro
 	_ = json.Unmarshal([]byte(keysJSON), &keys)
 
 	if len(keys) == 0 {
-		// Keys are empty. User requested: "Jika key kosong juga tidak apa-apa. Nanti user akan hubungi gue."
+		// Keys are empty. If not unlimited, decrement manual stock by qty
+		if isUnlimited == 0 && currentStock > 0 {
+			newStock := currentStock - qty
+			if newStock < 0 {
+				newStock = 0
+			}
+			_, _ = r.db.Exec("UPDATE local_products SET stock = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?", newStock, slug)
+		}
 		return []string{}, nil
 	}
 
@@ -448,13 +491,13 @@ func (r *LocalProductRepository) ReplenishKeys(id int64, newKeys []string) error
 func (r *LocalProductRepository) scanProduct(row *sql.Row) (*models.LocalProduct, error) {
 	var p models.LocalProduct
 	var keysJSON string
-	var hasPromoInt, isActiveInt, isForceOutInt int
+	var hasPromoInt, isActiveInt, isForceOutInt, isUnlimitedInt int
 
 	err := row.Scan(
 		&p.ID, &p.Slug, &p.Name, &p.Type, &p.Logo, &p.Region, &p.Warranty, &p.Description, &p.Terms,
 		&p.NameEN, &p.TypeEN, &p.RegionEN, &p.WarrantyEN, &p.DescriptionEN, &p.TermsEN,
 		&p.PriceIDR, &p.ReferencePriceIDR, &p.PromoPriceIDR, &hasPromoInt, &p.DiscountPercent,
-		&p.Stock, &keysJSON, &p.DisplayOrder, &p.SalesCount, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
+		&p.Stock, &isUnlimitedInt, &keysJSON, &p.DisplayOrder, &p.SalesCount, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -467,6 +510,7 @@ func (r *LocalProductRepository) scanProduct(row *sql.Row) (*models.LocalProduct
 	p.HasPromo = hasPromoInt == 1
 	p.IsActive = isActiveInt == 1
 	p.IsForceOutOfStock = isForceOutInt == 1
+	p.IsUnlimitedStock = isUnlimitedInt == 1
 
 	_ = json.Unmarshal([]byte(keysJSON), &p.StockKeys)
 	if p.StockKeys == nil {
@@ -479,13 +523,13 @@ func (r *LocalProductRepository) scanProduct(row *sql.Row) (*models.LocalProduct
 func (r *LocalProductRepository) scanProductFromRows(rows *sql.Rows) (*models.LocalProduct, error) {
 	var p models.LocalProduct
 	var keysJSON string
-	var hasPromoInt, isActiveInt, isForceOutInt int
+	var hasPromoInt, isActiveInt, isForceOutInt, isUnlimitedInt int
 
 	err := rows.Scan(
 		&p.ID, &p.Slug, &p.Name, &p.Type, &p.Logo, &p.Region, &p.Warranty, &p.Description, &p.Terms,
 		&p.NameEN, &p.TypeEN, &p.RegionEN, &p.WarrantyEN, &p.DescriptionEN, &p.TermsEN,
 		&p.PriceIDR, &p.ReferencePriceIDR, &p.PromoPriceIDR, &hasPromoInt, &p.DiscountPercent,
-		&p.Stock, &keysJSON, &p.DisplayOrder, &p.SalesCount, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
+		&p.Stock, &isUnlimitedInt, &keysJSON, &p.DisplayOrder, &p.SalesCount, &isActiveInt, &isForceOutInt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -498,6 +542,7 @@ func (r *LocalProductRepository) scanProductFromRows(rows *sql.Rows) (*models.Lo
 	p.HasPromo = hasPromoInt == 1
 	p.IsActive = isActiveInt == 1
 	p.IsForceOutOfStock = isForceOutInt == 1
+	p.IsUnlimitedStock = isUnlimitedInt == 1
 
 	_ = json.Unmarshal([]byte(keysJSON), &p.StockKeys)
 	if p.StockKeys == nil {
