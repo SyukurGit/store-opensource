@@ -72,5 +72,33 @@ console.log('--- Checking web/js/product.js syntax and logic ---');
 const js = fs.readFileSync('web/js/product.js', 'utf8');
 assert(js.includes('modalBody.scrollTop = 0'), 'modalBody.scrollTop reset missing');
 assert(js.includes('emailInput.scrollIntoView'), 'emailInput.scrollIntoView missing');
+assert(js.includes('shouldShowQrisNotice()'), 'shouldShowQrisNotice function missing');
+assert(js.includes('initialCheckoutCurrency'), 'initialCheckoutCurrency state missing');
+
+// Verify shouldShowQrisNotice logic by evaluating pure function
+const fnMatch = js.match(/function shouldShowQrisNotice\(\)\s*\{[\s\S]*?return false;\s*\}/);
+assert(fnMatch, 'Could not extract shouldShowQrisNotice function');
+const evalFn = new Function('initialCheckoutCurrency', 'window', 'sessionStorage', `${fnMatch[0]}; return shouldShowQrisNotice();`);
+
+// Case 1: Initial currency IDR & IP ID -> NO notice (false)
+assert.strictEqual(evalFn('IDR', { digimestClientCountry: 'ID' }, { getItem: () => 'ID' }), false, 'IDR + ID IP should NOT show notice');
+
+// Case 2: Initial currency IDR & local/unknown IP -> NO notice (false)
+assert.strictEqual(evalFn('IDR', {}, { getItem: () => null }), false, 'IDR + unknown IP should NOT show notice');
+
+// Case 3: Initial currency USD -> MUST show notice (true)
+assert.strictEqual(evalFn('USD', { digimestClientCountry: 'ID' }, { getItem: () => 'ID' }), true, 'USD initial currency MUST show notice');
+
+// Case 4: Foreign IP (e.g. US) -> MUST show notice (true)
+assert.strictEqual(evalFn('IDR', { digimestClientCountry: 'US' }, { getItem: () => 'US' }), true, 'Foreign IP MUST show notice');
+
+console.log('✓ shouldShowQrisNotice logic successfully validated across all test cases.');
+
+assert(idHtml.includes('class="gw-chevron"'), 'gw-chevron missing in web/product.html');
+assert(enHtml.includes('class="gw-chevron"'), 'gw-chevron missing in web/en/product.html');
+assert(idHtml.includes('qris-notice-point'), 'qris-notice-point missing in web/product.html');
+assert(enHtml.includes('qris-notice-point'), 'qris-notice-point missing in web/en/product.html');
+assert(css.includes('slideUpSheet'), 'slideUpSheet animation missing in CSS');
+assert(css.includes('.btn-change-gw.open .gw-chevron'), 'Chevron rotation rule missing in CSS');
 
 console.log('✓ All frontend checks passed successfully!');
