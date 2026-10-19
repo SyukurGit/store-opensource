@@ -139,8 +139,8 @@ func (r *ProductOverrideRepository) GetBySlug(slug string) (*models.ProductOverr
 // Upsert saves or updates a product override
 func (r *ProductOverrideRepository) Upsert(o *models.ProductOverride) error {
 	salesCount := o.SalesCount
-	if salesCount <= 0 {
-		salesCount = 10
+	if salesCount < 0 {
+		salesCount = 0
 	}
 	query := `
 		INSERT INTO product_overrides (
@@ -210,8 +210,8 @@ func (r *ProductOverrideRepository) Upsert(o *models.ProductOverride) error {
 
 // UpdateDisplayStats updates or initializes display_order and sales_count for an upstream product
 func (r *ProductOverrideRepository) UpdateDisplayStats(slug string, displayOrder int, salesCount int) error {
-	if salesCount <= 0 {
-		salesCount = 10
+	if salesCount < 0 {
+		salesCount = 0
 	}
 	query := `
 		INSERT INTO product_overrides (

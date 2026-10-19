@@ -796,8 +796,65 @@ func (h *PublicHandler) ValidateVoucher(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// GetAnnouncement handles GET /api/announcement
+func (h *PublicHandler) GetAnnouncement(w http.ResponseWriter, r *http.Request) {
+	if h.settingRepo == nil {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    nil,
+		})
+		return
+	}
+
+	val := h.settingRepo.Get("site_announcement", "")
+	if val == "" {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    nil,
+		})
+		return
+	}
+
+	var ann models.Announcement
+	if err := json.Unmarshal([]byte(val), &ann); err != nil {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    nil,
+		})
+		return
+	}
+
+	if !ann.IsActive {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"data":    nil,
+		})
+		return
+	}
+
+	// Apply bilingual fallback if client is in English context
+	lang := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("lang")))
+	if lang == "en" {
+		if ann.TitleEN != "" {
+			ann.Title = ann.TitleEN
+		}
+		if ann.ContentEN != "" {
+			ann.Content = ann.ContentEN
+		}
+		if ann.ActionTextEN != "" {
+			ann.ActionText = ann.ActionTextEN
+		}
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    ann,
+	})
+}
+
 func sendJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(data)
 }
+

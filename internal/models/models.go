@@ -155,7 +155,7 @@ func (lp *LocalProduct) ToProduct() *Product {
 	}
 
 	salesCount := lp.SalesCount
-	if salesCount <= 0 {
+	if salesCount < 0 {
 		salesCount = 10
 	}
 
@@ -654,5 +654,16 @@ type AutoDraftRequest struct {
 	Texts map[string]string `json:"texts"` // e.g. {"name": "...", "description": "..."}
 }
 
-
-
+// Announcement represents store-wide announcement popup config
+type Announcement struct {
+	IsActive     bool   `json:"is_active"`
+	Title        string `json:"title"`
+	TitleEN      string `json:"title_en,omitempty"`
+	Content      string `json:"content"`
+	ContentEN    string `json:"content_en,omitempty"`
+	BannerURL    string `json:"banner_url"`
+	ActionText   string `json:"action_text,omitempty"`
+	ActionTextEN string `json:"action_text_en,omitempty"`
+	ActionURL    string `json:"action_url,omitempty"`
+	UpdatedAt    int64  `json:"updated_at"` // Unix epoch timestamp
+}

@@ -98,9 +98,23 @@ func (s *CatalogService) StartBackgroundWorker(ctx context.Context, interval tim
 // InvalidateCache flushes the in-memory aggregated catalog cache and triggers a background sync.
 func (s *CatalogService) InvalidateCache() {
 	s.cacheMu.Lock()
+	s.cachedProds = nil
 	s.lastSyncTime = time.Time{}
 	s.cacheMu.Unlock()
 	s.TriggerBackgroundSync()
+}
+
+// UpdateDisplayStatsMemory atomically updates a product's display order and sales count in memory immediately (0ms latency).
+func (s *CatalogService) UpdateDisplayStatsMemory(slug string, displayOrder int, salesCount int) {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	for _, p := range s.cachedProds {
+		if strings.EqualFold(p.Slug, slug) {
+			p.DisplayOrder = displayOrder
+			p.SalesCount = salesCount
+			break
+		}
+	}
 }
 
 // GetPublicProducts retrieves the aggregated, active, customized product catalog.
@@ -128,8 +142,8 @@ func (s *CatalogService) GetPublicProducts(ctx context.Context, lang string) ([]
 	for _, raw := range rawProds {
 		p := *raw // shallow copy
 
-		// Enforce minimum sales count
-		if p.SalesCount <= 0 {
+		// Set default fallback sales count if uninitialized (< 0)
+		if p.SalesCount < 0 {
 			p.SalesCount = 10
 		}
 
@@ -261,7 +275,7 @@ func (s *CatalogService) GetPublicProducts(ctx context.Context, lang string) ([]
 			p.BaselineModalIDR = baselineModal
 			p.SurgePercent = surgePct
 			p.DisplayOrder = ov.DisplayOrder
-			if ov.SalesCount > 0 {
+			if ov.SalesCount >= 0 {
 				p.SalesCount = ov.SalesCount
 			}
 

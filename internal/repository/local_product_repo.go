@@ -274,9 +274,18 @@ func (r *LocalProductRepository) Update(id int64, req *models.LocalProductReques
 		hasPromoInt = 1
 	}
 
+	displayOrder := req.DisplayOrder
 	salesCount := req.SalesCount
-	if salesCount <= 0 {
-		salesCount = 10
+	if existing, err := r.GetByID(id); err == nil && existing != nil {
+		if displayOrder == 0 && existing.DisplayOrder > 0 {
+			displayOrder = existing.DisplayOrder
+		}
+		if salesCount == 0 && existing.SalesCount > 0 {
+			salesCount = existing.SalesCount
+		}
+	}
+	if salesCount < 0 {
+		salesCount = 0
 	}
 
 	query := `
@@ -389,8 +398,8 @@ func (r *LocalProductRepository) GetAllActive() ([]*models.LocalProduct, error) 
 
 // UpdateDisplayStats updates display_order and sales_count for a local product
 func (r *LocalProductRepository) UpdateDisplayStats(slug string, displayOrder int, salesCount int) error {
-	if salesCount <= 0 {
-		salesCount = 10
+	if salesCount < 0 {
+		salesCount = 0
 	}
 	query := `UPDATE local_products SET display_order = ?, sales_count = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?`
 	res, err := r.db.Exec(query, displayOrder, salesCount, slug)

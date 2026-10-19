@@ -346,3 +346,28 @@ func TestLocalProduct_StockAndUnlimitedModel(t *testing.T) {
 		t.Errorf("Expected stock 0 when force out of stock, got %d", prodForceOut.Stock)
 	}
 }
+
+func TestCatalogService_InvalidateCache_And_MemoryUpdate(t *testing.T) {
+	service := &CatalogService{
+		cachedProds: []*models.Product{
+			{Slug: "test-prod", Name: "Test Product", SalesCount: 10, DisplayOrder: 0},
+			{Slug: "other-prod", Name: "Other Product", SalesCount: 20, DisplayOrder: 1},
+		},
+		refreshTrigger: make(chan struct{}, 1),
+	}
+
+	// 1. Test instant memory update
+	service.UpdateDisplayStatsMemory("test-prod", 5, 88)
+	if service.cachedProds[0].SalesCount != 88 {
+		t.Errorf("Expected SalesCount 88, got %d", service.cachedProds[0].SalesCount)
+	}
+	if service.cachedProds[0].DisplayOrder != 5 {
+		t.Errorf("Expected DisplayOrder 5, got %d", service.cachedProds[0].DisplayOrder)
+	}
+
+	// 2. Test InvalidateCache clears cachedProds
+	service.InvalidateCache()
+	if service.cachedProds != nil {
+		t.Errorf("Expected cachedProds to be nil after InvalidateCache, got len=%d", len(service.cachedProds))
+	}
+}

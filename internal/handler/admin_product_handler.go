@@ -608,6 +608,17 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 		customTermsEN = existing.CustomTermsEN
 	}
 
+	displayOrder := req.DisplayOrder
+	salesCount := req.SalesCount
+	if existing != nil {
+		if displayOrder == 0 && existing.DisplayOrder > 0 {
+			displayOrder = existing.DisplayOrder
+		}
+		if salesCount == 0 && existing.SalesCount > 0 {
+			salesCount = existing.SalesCount
+		}
+	}
+
 	override := &models.ProductOverride{
 		ProductSlug:         slug,
 		CustomName:          req.CustomName,
@@ -626,8 +637,8 @@ func (h *AdminHandler) SaveProductOverride(w http.ResponseWriter, r *http.Reques
 		CustomWarrantyEN:    customWarrantyEN,
 		CustomDescriptionEN: customDescEN,
 		CustomTermsEN:       customTermsEN,
-		DisplayOrder:        req.DisplayOrder,
-		SalesCount:          req.SalesCount,
+		DisplayOrder:        displayOrder,
+		SalesCount:          salesCount,
 		IsActive:            req.IsActive,
 		IsForceOutOfStock:   req.IsForceOutOfStock,
 		BaselineModalIDR:    modalIDR,
@@ -751,8 +762,9 @@ func (h *AdminHandler) UpdateProductDisplayStats(w http.ResponseWriter, r *http.
 		}
 	}
 
-	// Always invalidate catalog cache so order changes reflect immediately
+	// Always mutate in-memory catalog immediately (0ms latency) and invalidate cache
 	if h.catalogService != nil {
+		h.catalogService.UpdateDisplayStatsMemory(slug, req.DisplayOrder, req.SalesCount)
 		h.catalogService.InvalidateCache()
 	}
 

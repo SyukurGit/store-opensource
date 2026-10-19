@@ -1,6 +1,14 @@
 .env
+.env.*
+!.env.example
 /web/
 /scratch_fe/
 storeku-linux
 deploy/storeku-linux
 *.exe
+storeku.db
+storeku.db-shm
+storeku.db-wal
+*.db
+*.db-shm
+*.db-wal

@@ -152,6 +152,7 @@ func main() {
 		r.Post("/orders/{invoice}/check", publicHandler.TriggerCheck)
 		r.Post("/orders/{invoice}/cancel", publicHandler.CancelOrder)
 		r.Get("/claim", publicHandler.ClaimProduct)
+		r.Get("/announcement", publicHandler.GetAnnouncement)
 
 		// Payment Gateways Webhook Receivers (Legacy & Unified Multi-Payment)
 		r.Post("/webhook/paymentg", webhookHandler.HandlePaymentGWebhook)
@@ -215,6 +216,11 @@ func main() {
 			r.Get("/admin/translations", adminHandler.GetTranslations)
 			r.Put("/admin/translations/{slug}", adminHandler.UpdateTranslation)
 			r.Post("/admin/translations/auto-draft", adminHandler.AutoDraftTranslation)
+
+			// Store Announcement Management
+			r.Get("/admin/announcement", adminHandler.GetAnnouncement)
+			r.Post("/admin/announcement", adminHandler.SaveAnnouncement)
+			r.Post("/admin/announcement/upload", adminHandler.UploadAnnouncementBanner)
 		})
 	})
 

@@ -10,10 +10,17 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o storeku-linux
 echo "📦 [3/4] Memasang binary baru ke /var/www/digimest..."
 sudo install -m 755 storeku-linux /var/www/digimest/storeku-linux
 
-# Update .env jika ada perubahan konfigurasi
-if [ -f ".env" ]; then
-    echo "⚙️ Memperbarui konfigurasi .env ke /var/www/digimest/.env..."
-    sudo cp .env /var/www/digimest/.env
+# Proteksi .env: JANGAN PERNAH menimpa .env production yang sudah berjalan di VPS!
+if [ ! -f "/var/www/digimest/.env" ]; then
+    if [ -f ".env.example" ]; then
+        echo "⚙️ Inisialisasi awal konfigurasi .env dari .env.example..."
+        sudo cp .env.example /var/www/digimest/.env
+    elif [ -f ".env" ]; then
+        echo "⚙️ Inisialisasi awal konfigurasi .env..."
+        sudo cp .env /var/www/digimest/.env
+    fi
+else
+    echo "🔒 File /var/www/digimest/.env live dipertahankan (aman 100%)."
 fi
 
 # Bersihkan direktori web statis lama dari VPS jika masih ada (Frontend sudah terpisah di Cloudflare Pages)
