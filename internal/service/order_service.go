@@ -412,6 +412,20 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 		visibleClaimCode = order.ClaimCode
 	}
 
+	// Sanitize BinanceTxID and TxHash to strictly prevent cross-contamination
+	isBinance := (order.PaymentGateway == "BINANCE" || order.PaymentMethod == "BINANCE_PAY")
+	isBEP20 := (order.PaymentGateway == "BEP20" || order.PaymentGateway == "USDT_BEP20" || order.PaymentMethod == "USDT" || order.PaymentMethod == "CRYPTO")
+
+	cleanBinanceTxID := order.BinanceTxID
+	if !isBinance || cleanBinanceTxID == "MANUAL_ADMIN_CONFIRMATION" || strings.HasPrefix(cleanBinanceTxID, "sbx_") {
+		cleanBinanceTxID = ""
+	}
+
+	cleanTxHash := order.TxHash
+	if !isBEP20 || !strings.HasPrefix(strings.ToLower(cleanTxHash), "0x") || len(cleanTxHash) < 60 {
+		cleanTxHash = ""
+	}
+
 	res := &models.OrderStatusResponse{
 		InvoiceNumber:      order.InvoiceNumber,
 		ClaimCode:          visibleClaimCode,
@@ -424,13 +438,13 @@ func (s *OrderService) GetOrderStatus(invoice string) (*models.OrderStatusRespon
 		PaymentChannel:     order.PaymentChannel,
 		CryptoAmountStr:    order.CryptoAmountStr,
 		CryptoCurrency:     order.CryptoCurrency,
-		BinanceTxID:        order.BinanceTxID,
+		BinanceTxID:        cleanBinanceTxID,
 		BinancePayID:       order.BinancePayID,
 		BinanceAccountName: order.BinanceAccountName,
 		WalletAddress:      order.WalletAddress,
 		TokenContract:      order.TokenContract,
 		Network:            order.Network,
-		TxHash:             order.TxHash,
+		TxHash:             cleanTxHash,
 		CexWarning:         order.CexWarning,
 		PaymentStatus:      order.PaymentStatus,
 		FulfillmentStatus:  order.FulfillmentStatus,
@@ -573,7 +587,24 @@ func (s *OrderService) ProcessPaymentSuccess(invoice string, txID string) error 
 
 	now := time.Now().UTC()
 	if order.PaymentStatus != "PAID" {
-		if err := s.orderRepo.UpdatePaymentSuccessWithTxID(invoice, "PAID", &now, txID); err != nil {
+		binanceTxID := ""
+		txHash := ""
+
+		isBinance := (order.PaymentGateway == "BINANCE" || order.PaymentMethod == "BINANCE_PAY")
+		isBEP20 := (order.PaymentGateway == "BEP20" || order.PaymentGateway == "USDT_BEP20" || order.PaymentMethod == "USDT" || order.PaymentMethod == "CRYPTO")
+
+		if isBinance {
+			if txID != "" && txID != "MANUAL_ADMIN_CONFIRMATION" && !strings.HasPrefix(txID, "sbx_") {
+				binanceTxID = txID
+			}
+		} else if isBEP20 {
+			if strings.HasPrefix(strings.ToLower(txID), "0x") && len(txID) >= 60 {
+				txHash = txID
+			}
+		}
+		// For QRIS / PAYMENTG or MANUAL_ADMIN_CONFIRMATION, both binanceTxID and txHash remain strictly empty
+
+		if err := s.orderRepo.UpdatePaymentSuccess(invoice, "PAID", &now, binanceTxID, txHash); err != nil {
 			log.Printf("Error updating payment status for %s: %v", invoice, err)
 		}
 

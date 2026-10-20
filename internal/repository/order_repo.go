@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"storeku/internal/database"
@@ -144,7 +145,8 @@ func (r *OrderRepository) UpdatePaymentStatus(invoice, status string, paidAt *ti
 	return err
 }
 
-func (r *OrderRepository) UpdatePaymentSuccessWithTxID(invoice, status string, paidAt *time.Time, txID string) error {
+// UpdatePaymentSuccess updates payment status and selectively records Binance Tx ID or Blockchain Tx Hash
+func (r *OrderRepository) UpdatePaymentSuccess(invoice, status string, paidAt *time.Time, binanceTxID, txHash string) error {
 	query := `
 		UPDATE orders
 		SET payment_status = ?, paid_at = ?,
@@ -153,8 +155,20 @@ func (r *OrderRepository) UpdatePaymentSuccessWithTxID(invoice, status string, p
 			updated_at = CURRENT_TIMESTAMP
 		WHERE invoice_number = ?
 	`
-	_, err := r.db.Exec(query, status, paidAt, txID, txID, txID, txID, invoice)
+	_, err := r.db.Exec(query, status, paidAt, binanceTxID, binanceTxID, txHash, txHash, invoice)
 	return err
+}
+
+// UpdatePaymentSuccessWithTxID preserves backward compatibility while preventing cross-contamination
+func (r *OrderRepository) UpdatePaymentSuccessWithTxID(invoice, status string, paidAt *time.Time, txID string) error {
+	binanceTxID := ""
+	txHash := ""
+	if strings.HasPrefix(strings.ToLower(txID), "0x") {
+		txHash = txID
+	} else if txID != "" && !strings.HasPrefix(txID, "sbx_") && txID != "MANUAL_ADMIN_CONFIRMATION" {
+		binanceTxID = txID
+	}
+	return r.UpdatePaymentSuccess(invoice, status, paidAt, binanceTxID, txHash)
 }
 
 func (r *OrderRepository) UpdateGatewayDetails(invoice, gwID, qrURL string, uniqueCode int, totalAmount int64, expiresAt *time.Time) error {

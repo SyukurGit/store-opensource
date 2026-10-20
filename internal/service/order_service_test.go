@@ -1017,4 +1017,122 @@ func TestOrderService_TriggerInstantCheckWithUnifiedGateway(t *testing.T) {
 	}
 }
 
+func TestProcessPaymentSuccess_GatewayMetadataIsolation(t *testing.T) {
+	svc, repo := setupTestOrderService(t)
 
+	exp := time.Now().Add(15 * time.Minute)
+
+	// 1. QRIS Order
+	qrisOrder := &models.Order{
+		InvoiceNumber:     "INV-QRIS-TEST-001",
+		ClaimCode:         "CLAIM-QRIS-001",
+		ProductSlug:       "canva-pro",
+		ProductName:       "Canva Pro 1 Bulan",
+		Quantity:          1,
+		TotalAmount:       15000,
+		PaymentGateway:    "PAYMENTG",
+		PaymentMethod:     "QRIS",
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := repo.CreateOrder(qrisOrder); err != nil {
+		t.Fatalf("failed to create qris order: %v", err)
+	}
+
+	// Process payment with PaymentG ShopeeTxID
+	if err := svc.ProcessPaymentSuccess("INV-QRIS-TEST-001", "sbx_tx_ord_shopee_92489946"); err != nil {
+		t.Fatalf("ProcessPaymentSuccess failed for QRIS: %v", err)
+	}
+
+	// Check DB row
+	fetchedQRIS, err := repo.GetOrderByInvoice("INV-QRIS-TEST-001")
+	if err != nil {
+		t.Fatalf("failed to get qris order: %v", err)
+	}
+	if fetchedQRIS.TxHash != "" {
+		t.Errorf("expected TxHash to be empty for QRIS, got: '%s'", fetchedQRIS.TxHash)
+	}
+	if fetchedQRIS.BinanceTxID != "" {
+		t.Errorf("expected BinanceTxID to be empty for QRIS, got: '%s'", fetchedQRIS.BinanceTxID)
+	}
+
+	// Check GetOrderStatus response
+	qrisStatusResp, err := svc.GetOrderStatus("INV-QRIS-TEST-001")
+	if err != nil {
+		t.Fatalf("GetOrderStatus failed: %v", err)
+	}
+	if qrisStatusResp.TxHash != "" {
+		t.Errorf("expected StatusResponse.TxHash to be empty for QRIS, got: '%s'", qrisStatusResp.TxHash)
+	}
+	if qrisStatusResp.BinanceTxID != "" {
+		t.Errorf("expected StatusResponse.BinanceTxID to be empty for QRIS, got: '%s'", qrisStatusResp.BinanceTxID)
+	}
+
+	// 2. Binance Pay Order
+	binanceOrder := &models.Order{
+		InvoiceNumber:     "INV-BINANCE-TEST-001",
+		ClaimCode:         "CLAIM-BIN-001",
+		ProductSlug:       "canva-pro",
+		ProductName:       "Canva Pro 1 Bulan",
+		Quantity:          1,
+		TotalAmount:       15000,
+		PaymentGateway:    "BINANCE",
+		PaymentMethod:     "BINANCE_PAY",
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := repo.CreateOrder(binanceOrder); err != nil {
+		t.Fatalf("failed to create binance order: %v", err)
+	}
+
+	if err := svc.ProcessPaymentSuccess("INV-BINANCE-TEST-001", "binance_tx_998877"); err != nil {
+		t.Fatalf("ProcessPaymentSuccess failed for Binance: %v", err)
+	}
+
+	fetchedBinance, err := repo.GetOrderByInvoice("INV-BINANCE-TEST-001")
+	if err != nil {
+		t.Fatalf("failed to get binance order: %v", err)
+	}
+	if fetchedBinance.BinanceTxID != "binance_tx_998877" {
+		t.Errorf("expected BinanceTxID 'binance_tx_998877', got: '%s'", fetchedBinance.BinanceTxID)
+	}
+	if fetchedBinance.TxHash != "" {
+		t.Errorf("expected TxHash to be empty for Binance Pay, got: '%s'", fetchedBinance.TxHash)
+	}
+
+	// 3. USDT BEP-20 Order
+	bep20Order := &models.Order{
+		InvoiceNumber:     "INV-BEP20-TEST-001",
+		ClaimCode:         "CLAIM-BEP-001",
+		ProductSlug:       "canva-pro",
+		ProductName:       "Canva Pro 1 Bulan",
+		Quantity:          1,
+		TotalAmount:       15000,
+		PaymentGateway:    "USDT_BEP20",
+		PaymentMethod:     "USDT",
+		PaymentStatus:     "PENDING",
+		FulfillmentStatus: "PENDING",
+		ExpiresAt:         &exp,
+	}
+	if err := repo.CreateOrder(bep20Order); err != nil {
+		t.Fatalf("failed to create bep20 order: %v", err)
+	}
+
+	validHash := "0x71c5b8b939f50e8006c6fa7ccf7ee33989fc7594924976a5960012e1a3fa4198"
+	if err := svc.ProcessPaymentSuccess("INV-BEP20-TEST-001", validHash); err != nil {
+		t.Fatalf("ProcessPaymentSuccess failed for BEP20: %v", err)
+	}
+
+	fetchedBEP, err := repo.GetOrderByInvoice("INV-BEP20-TEST-001")
+	if err != nil {
+		t.Fatalf("failed to get bep20 order: %v", err)
+	}
+	if fetchedBEP.TxHash != validHash {
+		t.Errorf("expected TxHash '%s', got: '%s'", validHash, fetchedBEP.TxHash)
+	}
+	if fetchedBEP.BinanceTxID != "" {
+		t.Errorf("expected BinanceTxID to be empty for BEP20, got: '%s'", fetchedBEP.BinanceTxID)
+	}
+}

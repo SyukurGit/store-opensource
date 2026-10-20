@@ -266,6 +266,30 @@ func RunMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Data sanitization to prevent cross-contamination between payment methods
+	dataSanitizationQueries := []string{
+		`UPDATE orders 
+		 SET tx_hash = '' 
+		 WHERE payment_gateway = 'PAYMENTG' 
+		    OR payment_method = 'QRIS' 
+		    OR payment_gateway = 'BINANCE' 
+		    OR payment_method = 'BINANCE_PAY'
+		    OR (tx_hash != '' AND tx_hash NOT LIKE '0x%');`,
+
+		`UPDATE orders 
+		 SET binance_tx_id = '' 
+		 WHERE payment_gateway = 'PAYMENTG' 
+		    OR payment_method = 'QRIS' 
+		    OR payment_gateway = 'BEP20' 
+		    OR payment_gateway = 'USDT_BEP20' 
+		    OR payment_method = 'USDT'
+		    OR binance_tx_id LIKE 'sbx_%' 
+		    OR binance_tx_id = 'MANUAL_ADMIN_CONFIRMATION';`,
+	}
+	for _, sanQ := range dataSanitizationQueries {
+		_, _ = db.Exec(sanQ)
+	}
+
 	return nil
 }
 
