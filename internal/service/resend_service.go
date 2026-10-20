@@ -94,7 +94,7 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
           <tr>
             <td>
               <div style="background-color: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 14px 16px; margin-bottom: 22px; color: #34d399; font-size: 14px; font-weight: 700;">
-                ✓ Pembayaran QRIS Berhasil Diverifikasi!
+                ✓ Pembayaran Berhasil Diverifikasi!
               </div>
             </td>
           </tr>
@@ -130,7 +130,7 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
                   %s
                 </div>
                 <div style="font-size: 12px; color: #94a3b8; margin-top: 10px; line-height: 1.4;">
-                  Salin kode di atas jika Anda ingin mengambil pesanan secara manual di menu Klaim Produk Digimest.
+                  Salin kode di atas jika Anda ingin mengambil pesanan secara manual di menu Ambil Produk Digimest.
                 </div>
               </div>
             </td>
@@ -144,7 +144,7 @@ func (s *ResendService) SendClaimEmail(toEmail, invoice, claimCode string, total
                   🔗 ATAU KLIK LINK DI BAWAH INI UNTUK AMBIL PRODUK ANDA:
                 </div>
                 <div style="font-size: 12px; color: #cbd5e1; margin-bottom: 16px;">
-                  Anda dapat langsung membuka lisensi tanpa perlu memasukkan kode lagi:
+                  Anda dapat langsung membuka rincian produk tanpa perlu memasukkan kode lagi:
                 </div>
                 <div>
                   <a href="%s" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">
