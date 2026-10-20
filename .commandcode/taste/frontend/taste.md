@@ -1,0 +1,6 @@
+# Frontend Preferences
+
+- Prioritizes mobile UX/responsiveness; asks for mobile fixes explicitly scoped to mobile ("mobile aja") while leaving desktop and dark mode untouched. Confidence: 0.85
+- Expects responsive work verified against real mobile viewports (e.g. iPhone 12 / 390px; range 320px–430px) with no horizontal overflow. Confidence: 0.8
+- Wants UI polished for both dark and light modes, keeping theme parity (e.g. light mode needs clear borders so white components don't blend into light backgrounds). Confidence: 0.75
+- Prefers modern, clean UI shapes — e.g. rounded/pill badges over square ones — while preserving the existing brand colors, layout, and structure (no full redesign). Confidence: 0.65
