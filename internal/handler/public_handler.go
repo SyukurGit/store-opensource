@@ -88,13 +88,18 @@ func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	support := loadSupportLinks(h.settingRepo)
+	if support.TelegramUsername == "" && username != "" {
+		support.TelegramUsername = strings.TrimPrefix(username, "@")
+		support.TelegramURL = fmt.Sprintf("https://t.me/%s", support.TelegramUsername)
+	}
 	supportPayload := map[string]interface{}{
-		"whatsapp_number":     support.WhatsAppNumber,
-		"whatsapp_url":        support.WhatsAppURL,
-		"tiktok_url":          support.TikTokURL,
-		"threads_url":         support.ThreadsURL,
-		"whatsapp_social_url": support.WhatsAppSocialURL,
-		"reseller_url":        support.ResellerURL,
+		"whatsapp_number":   support.WhatsAppNumber,
+		"whatsapp_url":      support.WhatsAppURL,
+		"telegram_username": support.TelegramUsername,
+		"telegram_url":      support.TelegramURL,
+		"tiktok_url":        support.TikTokURL,
+		"threads_url":       support.ThreadsURL,
+		"reseller_url":      support.ResellerURL,
 	}
 
 	// Detect client country code from Cloudflare / CDN proxy headers or test query simulator

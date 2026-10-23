@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"storeku/internal/models"
@@ -13,11 +14,13 @@ import (
 
 const (
 	settingCSWhatsAppNumber = "cs_whatsapp_number"
+	settingCSTelegram       = "telegram_cs_username"
 	settingSocialTikTok     = "social_tiktok_url"
 	settingSocialThreads    = "social_threads_url"
-	settingSocialWhatsApp   = "social_whatsapp_url"
 	settingResellerURL      = "cs_reseller_url"
 )
+
+var telegramUsernamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{4,32}$`)
 
 func whatsappDigits(raw string) string {
 	var b strings.Builder
@@ -50,14 +53,16 @@ func loadSupportLinks(repo *repository.SettingRepository) models.SupportLinks {
 		links.WhatsAppNumber = "+" + digits
 		links.WhatsAppURL = "https://wa.me/" + digits
 	}
+
+	links.TelegramUsername = strings.TrimPrefix(strings.TrimSpace(all[settingCSTelegram]), "@")
+	if links.TelegramUsername != "" {
+		links.TelegramURL = "https://t.me/" + links.TelegramUsername
+	}
+
 	links.TikTokURL = strings.TrimSpace(all[settingSocialTikTok])
 	links.ThreadsURL = strings.TrimSpace(all[settingSocialThreads])
-	links.WhatsAppSocialURL = strings.TrimSpace(all[settingSocialWhatsApp])
 	links.ResellerURL = strings.TrimSpace(all[settingResellerURL])
 
-	if links.WhatsAppSocialURL == "" {
-		links.WhatsAppSocialURL = links.WhatsAppURL
-	}
 	if links.ResellerURL == "" {
 		links.ResellerURL = links.WhatsAppURL
 	}
@@ -73,6 +78,46 @@ func normalizeWhatsAppNumber(raw string) (string, error) {
 		return "", fmt.Errorf("nomor WhatsApp tidak valid (gunakan format 08xx atau 62xx, 9-15 digit)")
 	}
 	return digits, nil
+}
+
+func normalizeTelegram(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+
+	if strings.HasPrefix(raw, "@") {
+		raw = strings.TrimPrefix(raw, "@")
+	}
+
+	lower := strings.ToLower(raw)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") ||
+		strings.HasPrefix(lower, "t.me/") || strings.HasPrefix(lower, "telegram.me/") {
+		if !strings.Contains(raw, "://") {
+			raw = "https://" + raw
+		}
+		u, err := url.Parse(raw)
+		if err != nil {
+			return "", fmt.Errorf("link Telegram tidak valid")
+		}
+		host := strings.ToLower(u.Hostname())
+		if host != "t.me" && host != "telegram.me" && host != "www.t.me" {
+			return "", fmt.Errorf("link Telegram harus menggunakan domain t.me")
+		}
+		username := strings.Trim(u.Path, "/")
+		if idx := strings.Index(username, "/"); idx >= 0 {
+			username = username[:idx]
+		}
+		if !telegramUsernamePattern.MatchString(username) {
+			return "", fmt.Errorf("username Telegram tidak valid (4-32 karakter, huruf/angka/garis bawah)")
+		}
+		return username, nil
+	}
+
+	if !telegramUsernamePattern.MatchString(raw) {
+		return "", fmt.Errorf("username Telegram tidak valid (4-32 karakter, huruf/angka/garis bawah)")
+	}
+	return raw, nil
 }
 
 func normalizeSocialURL(raw, platform string) (string, error) {
@@ -109,19 +154,20 @@ func normalizeSocialURL(raw, platform string) (string, error) {
 			host != "threads.com" && !strings.HasSuffix(host, ".threads.com") {
 			return "", fmt.Errorf("link Threads harus menggunakan domain threads.net atau threads.com")
 		}
-	case "whatsapp":
-		if host != "wa.me" && host != "whatsapp.com" && !strings.HasSuffix(host, ".whatsapp.com") {
-			return "", fmt.Errorf("link WhatsApp harus menggunakan domain wa.me atau whatsapp.com")
-		}
 	}
 	return u.String(), nil
 }
 
 // GetSupportLinks handles GET /api/admin/support-links
 func (h *AdminHandler) GetSupportLinks(w http.ResponseWriter, r *http.Request) {
+	links := loadSupportLinks(h.settingRepo)
+	if links.TelegramUsername == "" && h.cfg != nil && h.cfg.TelegramSupportUsername != "" {
+		links.TelegramUsername = strings.TrimPrefix(h.cfg.TelegramSupportUsername, "@")
+		links.TelegramURL = "https://t.me/" + links.TelegramUsername
+	}
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"data":    loadSupportLinks(h.settingRepo),
+		"data":    links,
 	})
 }
 
@@ -141,17 +187,21 @@ func (h *AdminHandler) SaveSupportLinks(w http.ResponseWriter, r *http.Request) 
 		sendJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": err.Error()})
 		return
 	}
+	telegramRaw := body.TelegramUsername
+	if strings.TrimSpace(telegramRaw) == "" {
+		telegramRaw = body.TelegramURL
+	}
+	telegramUsername, err := normalizeTelegram(telegramRaw)
+	if err != nil {
+		sendJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": err.Error()})
+		return
+	}
 	tiktokURL, err := normalizeSocialURL(body.TikTokURL, "tiktok")
 	if err != nil {
 		sendJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": err.Error()})
 		return
 	}
 	threadsURL, err := normalizeSocialURL(body.ThreadsURL, "threads")
-	if err != nil {
-		sendJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": err.Error()})
-		return
-	}
-	whatsAppSocialURL, err := normalizeSocialURL(body.WhatsAppSocialURL, "whatsapp")
 	if err != nil {
 		sendJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": err.Error()})
 		return
@@ -164,9 +214,9 @@ func (h *AdminHandler) SaveSupportLinks(w http.ResponseWriter, r *http.Request) 
 
 	values := map[string]string{
 		settingCSWhatsAppNumber: digits,
+		settingCSTelegram:       telegramUsername,
 		settingSocialTikTok:     tiktokURL,
 		settingSocialThreads:    threadsURL,
-		settingSocialWhatsApp:   whatsAppSocialURL,
 		settingResellerURL:      resellerURL,
 	}
 	for key, value := range values {

@@ -43,6 +43,39 @@ func TestNormalizeWhatsAppNumber(t *testing.T) {
 	}
 }
 
+func TestNormalizeTelegram(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+		wantErr  bool
+	}{
+		{"@Digimestsupport", "Digimestsupport", false},
+		{"Digimestsupport", "Digimestsupport", false},
+		{"https://t.me/Digimestsupport", "Digimestsupport", false},
+		{"t.me/Digimestsupport", "Digimestsupport", false},
+		{"https://example.com/Digimestsupport", "", true},
+		{"ab", "", true},
+		{"", "", false},
+	}
+
+	for _, tc := range cases {
+		got, err := normalizeTelegram(tc.input)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("normalizeTelegram(%q) expected error, got %q", tc.input, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("normalizeTelegram(%q) unexpected error: %v", tc.input, err)
+			continue
+		}
+		if got != tc.expected {
+			t.Errorf("normalizeTelegram(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
 func TestNormalizeSocialURL(t *testing.T) {
 	tiktok, err := normalizeSocialURL("@digimest", "tiktok")
 	if err != nil || tiktok != "https://www.tiktok.com/@digimest" {
@@ -75,9 +108,9 @@ func TestSaveAndLoadSupportLinks(t *testing.T) {
 
 	body := `{
 		"whatsapp_number": "0812-3456-7890",
+		"telegram_username": "@Digimestsupport",
 		"tiktok_url": "@digimest",
 		"threads_url": "https://www.threads.net/@digimest",
-		"whatsapp_social_url": "",
 		"reseller_url": ""
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/support-links", strings.NewReader(body))
@@ -91,12 +124,13 @@ func TestSaveAndLoadSupportLinks(t *testing.T) {
 	var response struct {
 		Success bool `json:"success"`
 		Data    struct {
-			WhatsAppNumber    string `json:"whatsapp_number"`
-			WhatsAppURL       string `json:"whatsapp_url"`
-			TikTokURL         string `json:"tiktok_url"`
-			ThreadsURL        string `json:"threads_url"`
-			WhatsAppSocialURL string `json:"whatsapp_social_url"`
-			ResellerURL       string `json:"reseller_url"`
+			WhatsAppNumber   string `json:"whatsapp_number"`
+			WhatsAppURL      string `json:"whatsapp_url"`
+			TelegramUsername string `json:"telegram_username"`
+			TelegramURL      string `json:"telegram_url"`
+			TikTokURL        string `json:"tiktok_url"`
+			ThreadsURL       string `json:"threads_url"`
+			ResellerURL      string `json:"reseller_url"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
@@ -112,19 +146,22 @@ func TestSaveAndLoadSupportLinks(t *testing.T) {
 	if response.Data.WhatsAppURL != "https://wa.me/6281234567890" {
 		t.Errorf("whatsapp_url = %q", response.Data.WhatsAppURL)
 	}
+	if response.Data.TelegramUsername != "Digimestsupport" {
+		t.Errorf("telegram_username = %q", response.Data.TelegramUsername)
+	}
+	if response.Data.TelegramURL != "https://t.me/Digimestsupport" {
+		t.Errorf("telegram_url = %q", response.Data.TelegramURL)
+	}
 	if response.Data.TikTokURL != "https://www.tiktok.com/@digimest" {
 		t.Errorf("tiktok_url = %q", response.Data.TikTokURL)
-	}
-	if response.Data.WhatsAppSocialURL != "https://wa.me/6281234567890" {
-		t.Errorf("whatsapp_social_url fallback = %q", response.Data.WhatsAppSocialURL)
 	}
 	if response.Data.ResellerURL != "https://wa.me/6281234567890" {
 		t.Errorf("reseller_url fallback = %q", response.Data.ResellerURL)
 	}
 
 	loaded := loadSupportLinks(repo)
-	if loaded.TikTokURL != response.Data.TikTokURL {
-		t.Errorf("loaded tiktok_url = %q", loaded.TikTokURL)
+	if loaded.TelegramURL != response.Data.TelegramURL {
+		t.Errorf("loaded telegram_url = %q", loaded.TelegramURL)
 	}
 }
 
