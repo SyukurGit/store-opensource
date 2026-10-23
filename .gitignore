@@ -12,3 +12,4 @@ storeku.db-wal
 *.db
 *.db-shm
 *.db-wal
+/ekstensi/
