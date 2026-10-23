@@ -4,4 +4,5 @@
 - Treat API contracts as sacred: never change Go `json:"..."` struct tags, response types, status codes, or endpoint URLs without checking and syncing every `/web` caller. Confidence: 0.9
 - Never touch network/proxy/CORS or cookie/session settings (`SameSite`, `Secure`, `Domain`), proxy-IP header reading, or `.env` without explicit approval. Confidence: 0.85
 - Keep configuration and secret keys in environment variables (`.env`) rather than hardcoded. Confidence: 0.7
+- Store user-editable content/settings (contact numbers, support and social links) in the settings store and expose them through the API — no hardcoded URLs/usernames in HTML/JS; frontend hydrates from `/api/config` with server-side normalization and validation. Confidence: 0.85
 - Avoid "band-aid" fixes (shrinking font sizes, adding `overflow: hidden`, patches) when a root-cause structural fix is possible. Confidence: 0.8

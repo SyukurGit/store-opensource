@@ -87,6 +87,16 @@ func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	support := loadSupportLinks(h.settingRepo)
+	supportPayload := map[string]interface{}{
+		"whatsapp_number":     support.WhatsAppNumber,
+		"whatsapp_url":        support.WhatsAppURL,
+		"tiktok_url":          support.TikTokURL,
+		"threads_url":         support.ThreadsURL,
+		"whatsapp_social_url": support.WhatsAppSocialURL,
+		"reseller_url":        support.ResellerURL,
+	}
+
 	// Detect client country code from Cloudflare / CDN proxy headers or test query simulator
 	clientCountry := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("simulate_country")))
 	if clientCountry == "" {
@@ -100,11 +110,13 @@ func (h *PublicHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 		"success":           true,
 		"telegram_username": username,
 		"telegram_url":      fmt.Sprintf("https://t.me/%s", username),
+		"support":           supportPayload,
 		"usd_rate":          usdRate,
 		"client_country":    clientCountry,
 		"data": map[string]interface{}{
 			"telegram_username": username,
 			"telegram_url":      fmt.Sprintf("https://t.me/%s", username),
+			"support":           supportPayload,
 			"usd_rate":          usdRate,
 			"client_country":    clientCountry,
 		},
@@ -857,4 +869,3 @@ func sendJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(data)
 }
-

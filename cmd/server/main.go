@@ -200,6 +200,8 @@ func main() {
 			r.Delete("/admin/vouchers/{id}", adminHandler.DeleteVoucher)
 			r.Get("/admin/settings", adminHandler.GetSettings)
 			r.Post("/admin/settings", adminHandler.SaveSettings)
+			r.Get("/admin/support-links", adminHandler.GetSupportLinks)
+			r.Post("/admin/support-links", adminHandler.SaveSupportLinks)
 			r.Get("/admin/maintenance/stats", adminHandler.GetDatabaseStats)
 			r.Post("/admin/maintenance/clean", adminHandler.CleanDatabase)
 
@@ -251,7 +253,6 @@ func main() {
 	log.Printf(" 📦  DigitalCore URL: %s", cfg.DigitalCoreBaseURL)
 	log.Printf(" 📧  Resend Sender  : %s", cfg.ResendFromEmail)
 	log.Printf("==================================================")
-
 
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("Server exited with error: %v", err)
